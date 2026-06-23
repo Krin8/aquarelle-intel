@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Brand {
+  id               String   @id @default(cuid())
+  name             String
+  website          String
+  corporateUrl     String?
+  linkedinUrl      String?
+  logoUrl          String?
+  status           String   @default("discovered") // discovered | researching | analyzed | qualified | rejected
+  region           String   @default("Global")
+  segment          String?  // luxury | premium | mid-range | value | fast-fashion
+  priceRange       String?  // e.g. "$50-$200"
+  complianceNotes  String?
+  description      String?
+  lastScrapedAt    DateTime?
+  dataFreshness    Int      @default(0) // 0-100
+  matchScore       Int?     // 0-100, set by AI gap detection
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  products    Product[]
+  contacts    Contact[]
+  notes       Note[]
+  aiAnalyses  AIAnalysis[]
+  scrapeLogs  ScrapeLog[]
+
+  @@index([status])
+  @@index([region])
+}
+
+model Product {
+  id         String  @id @default(cuid())
+  brandId    String
+  name       String
+  category   String? // tops | bottoms | dresses | outerwear | accessories | footwear
+  priceMin   Float?
+  priceMax   Float?
+  fit        String? // slim | regular | oversized | relaxed
+  material   String?
+  season     String? // SS25 | AW25 | year-round
+  imageUrl   String?
+  sourceUrl  String?
+  confidence Float   @default(0.5) // 0-1
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+}
+
+model Contact {
+  id              String  @id @default(cuid())
+  brandId         String
+  name            String
+  role            String? // e.g. "Head of Wholesale", "Buying Director"
+  email           String?
+  phone           String?
+  linkedinUrl     String?
+  buyerType       String  @default("unknown") // decision_maker | influencer | gatekeeper | unknown
+  type            String  @default("direct") // direct | generic | phone
+  confidenceScore Float   @default(0.3) // 0-1
+  source          String  @default("website") // website | linkedin | zoominfo | manual
+  createdAt       DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+}
+
+model AIAnalysis {
+  id             String   @id @default(cuid())
+  brandId        String
+  analysisType   String   // website_understanding | gap_detection | pitch_suggestion
+  prompt         String
+  response       String
+  structuredData String?  // JSON string of parsed output
+  modelUsed      String   @default("llama3.1:8b")
+  tokensUsed     Int?
+  feedbackRating String?  // null | thumbs_up | thumbs_down
+  createdAt      DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+  @@index([analysisType])
+}
+
+model ScrapeLog {
+  id             String   @id @default(cuid())
+  brandId        String
+  url            String
+  method         String   @default("cheerio") // cheerio | puppeteer
+  status         String   @default("pending") // pending | success | failed | blocked
+  contentHash    String?
+  rawContentPath String?  // file path to stored raw content
+  errorMessage   String?
+  pageTitle      String?
+  metaDescription String?
+  contentLength  Int?
+  scrapedData    String?  // JSON: { emails, phones, headings, linkCount, imageCount }
+  scrapedAt      DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  brandId   String
+  content   String
+  category  String   @default("general") // general | meeting | call | research
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+}
+
+model Region {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  code        String  @unique
+  description String?
+}
+
+model PitchTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  prompt    String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
