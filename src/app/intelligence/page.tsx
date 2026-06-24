@@ -102,6 +102,13 @@ export default async function IntelligencePage() {
                       {analysis.analysisType === 'pitch_suggestion' && (
                         <p>{(structured as Record<string, string>).recommendedApproach || analysis.response.slice(0, 300)}</p>
                       )}
+                      {analysis.analysisType === 'qa_answer' && (
+                        <p>
+                          <strong style={{ color: 'var(--accent-cyan)' }}>Q: {analysis.prompt}</strong>
+                          <br />
+                          {(structured as Record<string, string>).answer || analysis.response.slice(0, 300)}
+                        </p>
+                      )}
                     </>
                   ) : (
                     <p>{analysis.response.slice(0, 300)}...</p>

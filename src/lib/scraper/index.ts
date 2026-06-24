@@ -16,6 +16,12 @@ export interface ScrapedContact {
   type: string;
 }
 
+export interface ScrapedDocument {
+  title: string;
+  url: string;
+  type: string;
+}
+
 export interface ScrapedContent {
   pageTitle: string;
   metaDescription: string;
@@ -28,6 +34,7 @@ export interface ScrapedContent {
   images: { alt: string; src: string }[];
   contentLength: number;
   extractedContacts?: ScrapedContact[];
+  extractedDocuments?: ScrapedDocument[];
 }
 
 export interface ScrapeResult {
@@ -100,7 +107,7 @@ export async function scrapeUrl(url: string, corporateUrl?: string | null): Prom
     
     // Build arguments. We pass corporateUrl as the second arg if it exists.
     const args = `"${venvPython}" "${pythonScript}" "${url}"` + (corporateUrl ? ` "${corporateUrl}"` : "");
-    const { stdout, stderr } = await execAsync(args);
+    const { stdout, stderr } = await execAsync(args, { maxBuffer: 1024 * 1024 * 10 }); // 10MB buffer
     
     // Scrapy logs go to stderr, but our JSON goes to stdout
     const result = JSON.parse(stdout);
@@ -111,6 +118,7 @@ export async function scrapeUrl(url: string, corporateUrl?: string | null): Prom
     
     const pages = result.data.pages || [];
     const contacts = result.data.contacts || [];
+    const documents = result.data.documents || [];
 
     if (pages.length === 0) {
         throw new Error('Scrapy extracted 0 pages (maybe blocked or empty)');
@@ -129,7 +137,8 @@ export async function scrapeUrl(url: string, corporateUrl?: string | null): Prom
       links: [],
       images: [],
       contentLength: pages.reduce((acc: number, p: any) => acc + (p.content_length || 0), 0),
-      extractedContacts: contacts
+      extractedContacts: contacts,
+      extractedDocuments: documents
     };
 
     const contentHash = crypto

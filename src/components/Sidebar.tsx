@@ -1,7 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+
+import { setModelPreference } from '@/actions/settings-actions';
 
 const navItems = [
   {
@@ -10,6 +13,7 @@ const navItems = [
       { href: '/', label: 'Dashboard', icon: '◈' },
       { href: '/brands', label: 'Brand Directory', icon: '❖' },
       { href: '/intelligence', label: 'AI Insights', icon: '✦' },
+      { href: '/analytics', label: 'Analytics', icon: '📊' },
       { href: '/regions', label: 'Regions', icon: '◉' },
     ],
   },
@@ -17,19 +21,37 @@ const navItems = [
     section: 'Actions',
     items: [
       { href: '/brands/new', label: 'Add Brand', icon: '✚' },
+      { href: '/settings/integrations', label: 'Integrations', icon: '🔗' },
       { href: '/settings', label: 'Settings', icon: '⚙️' },
     ],
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ initialModel = 'ollama' }: { initialModel?: 'ollama' | 'gemini' }) {
   const pathname = usePathname();
+  const [model, setModel] = useState<'ollama' | 'gemini'>(initialModel);
+  const router = useRouter();
+
+  const handleModelToggle = async () => {
+    try {
+      const nextModel = model === 'ollama' ? 'gemini' : 'ollama';
+      setModel(nextModel);
+      
+      // Server action to set cookie
+      await setModelPreference(nextModel);
+      router.refresh();
+    } catch (e) {
+      console.error('Failed to toggle model:', e);
+      // Revert state if failed
+      setModel(model);
+    }
+  };
 
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
         <div className="sidebar-logo-icon">◆</div>
-        <span className="sidebar-logo-text">Laguna</span>
+        <span className="sidebar-logo-text">CIEL Textiles</span>
         <span className="sidebar-logo-badge">INTEL</span>
       </div>
 
@@ -58,9 +80,27 @@ export function Sidebar() {
       ))}
 
       <div className="sidebar-footer">
-        <div className="sidebar-status">
-          <span className="sidebar-status-dot" id="ollama-status"></span>
-          <span>Ollama AI</span>
+        <div 
+          className="sidebar-status" 
+          onClick={handleModelToggle}
+          style={{ 
+            cursor: 'pointer', 
+            padding: '8px', 
+            borderRadius: '6px',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            userSelect: 'none'
+          }}
+          title="Click to toggle AI Model"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="sidebar-status-dot" style={{ backgroundColor: model === 'gemini' ? 'var(--accent-indigo)' : 'var(--accent-emerald)' }}></span>
+            <span style={{ fontWeight: 500 }}>{model === 'gemini' ? 'Gemini Pro' : 'Ollama AI'}</span>
+          </div>
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>⟲</span>
         </div>
       </div>
     </aside>

@@ -35,6 +35,30 @@ export async function checkGeminiHealth(): Promise<{
   }
 }
 
+async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, initialDelay = 1500): Promise<T> {
+  let lastError: any;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      const is503 = error?.status === 503 || error?.message?.includes('503') || error?.status === 'UNAVAILABLE';
+      const is429 = error?.status === 429 || error?.message?.includes('429') || error?.status === 'RESOURCE_EXHAUSTED';
+      
+      if (!is503 && !is429) {
+        throw error;
+      }
+      
+      if (attempt < maxRetries - 1) {
+        const delay = initialDelay * Math.pow(2, attempt);
+        console.warn(`Gemini API busy (attempt ${attempt + 1}/${maxRetries}). Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw new Error(`Gemini API error after ${maxRetries} attempts: ${lastError?.message || lastError}`);
+}
+
 export async function generateStructuredResponse<T>(
   systemPrompt: string,
   userPrompt: string,
@@ -42,7 +66,7 @@ export async function generateStructuredResponse<T>(
 ): Promise<{ result: T; rawResponse: string; model: string }> {
   const ai = getGemini();
 
-  const response = await ai.models.generateContent({
+  const response = await withRetry(() => ai.models.generateContent({
     model: GEMINI_MODEL,
     contents: userPrompt,
     config: {
@@ -51,7 +75,7 @@ export async function generateStructuredResponse<T>(
       maxOutputTokens: 8192,
       responseMimeType: 'application/json',
     },
-  });
+  }));
 
   const rawResponse = response.text;
   if (!rawResponse) {
@@ -81,7 +105,7 @@ export async function generateTextResponse(
 ): Promise<{ text: string; model: string }> {
   const ai = getGemini();
 
-  const response = await ai.models.generateContent({
+  const response = await withRetry(() => ai.models.generateContent({
     model: GEMINI_MODEL,
     contents: userPrompt,
     config: {
@@ -89,7 +113,7 @@ export async function generateTextResponse(
       temperature: 0.5,
       maxOutputTokens: 2048,
     },
-  });
+  }));
 
   if (!response.text) {
     throw new Error('No response text received from Gemini');

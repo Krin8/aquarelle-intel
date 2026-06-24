@@ -6,11 +6,19 @@ import { scoreConfidence, getContactConfidence } from '@/lib/normalizer/confiden
 import { extractContacts } from '@/lib/ai/analyzers/contact-extractor';
 import { revalidatePath } from 'next/cache';
 
-export async function scrapeBrand(brandId: string) {
+export async function scrapeBrand(brandId: string, options?: { useDataProvider?: boolean; useLinkedin?: boolean }) {
   const brand = await prisma.brand.findUnique({ where: { id: brandId } });
   if (!brand) return { error: 'Brand not found' };
 
   const previousStatus = brand.status;
+  
+  let modelPref: 'ollama' | 'gemini' = 'gemini';
+  try {
+    const { getModelPreference } = await import('@/actions/settings-actions');
+    modelPref = await getModelPreference();
+  } catch (e) {
+    console.warn('Could not get model preference in scrapeBrand, defaulting to gemini');
+  }
 
   try {
     // Update status to researching
@@ -24,7 +32,7 @@ export async function scrapeBrand(brandId: string) {
     if (!corporateUrl) {
       console.log(`[Scrape] Discovering corporate URL for ${brand.name}...`);
       const { findCorporateUrl } = await import('@/lib/scraper/corporate-finder');
-      const foundUrl = await findCorporateUrl(brand.name, brand.website);
+      const foundUrl = await findCorporateUrl(brand.name, brand.website, modelPref);
       if (foundUrl) {
         corporateUrl = foundUrl;
         console.log(`[Scrape] Discovered corporate URL: ${corporateUrl}`);
@@ -43,7 +51,7 @@ export async function scrapeBrand(brandId: string) {
     if (!linkedinUrl) {
       console.log(`[Scrape] Discovering LinkedIn URL for ${brand.name}...`);
       const { findLinkedinUrl } = await import('@/lib/scraper/linkedin-finder');
-      const foundUrl = await findLinkedinUrl(brand.name, brand.website);
+      const foundUrl = await findLinkedinUrl(brand.name, brand.website, modelPref);
       if (foundUrl) {
         linkedinUrl = foundUrl;
         console.log(`[Scrape] Discovered LinkedIn URL: ${linkedinUrl}`);
@@ -97,10 +105,14 @@ export async function scrapeBrand(brandId: string) {
     const now = new Date();
     const scores = scoreConfidence(content, now);
 
-    // Delete old website-sourced contacts before re-extracting
-    // This ensures stale contacts don't persist across rescrapes
+    // Delete old website-sourced contacts and documents before re-extracting
+    // This ensures stale data doesn't persist across rescrapes
     await prisma.contact.deleteMany({
       where: { brandId, source: 'website' },
+    });
+    
+    await prisma.document.deleteMany({
+      where: { brandId },
     });
 
     // AI Contact Extraction
@@ -135,6 +147,8 @@ export async function scrapeBrand(brandId: string) {
           brandId,
           name: c.name,
           role: c.role || null,
+          department: c.department || null,
+          seniority: c.seniority || null,
           email: emailToUse,
           phone: c.phone || null,
           buyerType: c.buyerType,
@@ -184,6 +198,79 @@ export async function scrapeBrand(brandId: string) {
     }
     console.log(`[Scrape] Saved ${scrapedContactCount} context-aware contacts`);
 
+    // Run Opt-in Scrapers
+    let optInContactCount = 0;
+    
+    // Data Provider (ZoomInfo)
+    if (options?.useDataProvider) {
+      console.log(`[Scrape] Running Data Provider Scraper...`);
+      const { scrapeDataProvider } = await import('@/lib/scraper/data-provider-scraper');
+      const dpResult = await scrapeDataProvider(brand.name, brand.website);
+      if (dpResult.success && dpResult.contacts) {
+        for (const contact of dpResult.contacts) {
+          await prisma.contact.create({
+            data: {
+              brandId,
+              name: contact.name || 'Unknown',
+              role: contact.role,
+              source: contact.source_url || 'zoominfo',
+              confidenceScore: (contact.confidence || 75) / 100,
+              type: 'direct',
+            },
+          });
+          optInContactCount++;
+        }
+      }
+    }
+
+    // LinkedIn Employees
+    if (options?.useLinkedin) {
+      console.log(`[Scrape] Running LinkedIn Employee Scraper...`);
+      const { scrapeLinkedinEmployees } = await import('@/lib/scraper/linkedin-scraper');
+      const liResult = await scrapeLinkedinEmployees(brand.name, brand.website);
+      if (liResult.success && liResult.contacts) {
+        for (const contact of liResult.contacts) {
+          const cAny = contact as any;
+          await prisma.contact.create({
+            data: {
+              brandId,
+              name: contact.name || 'Unknown',
+              role: contact.role,
+              email: contact.email || null,
+              linkedinUrl: contact.source_url,
+              officeLocation: cAny.officeLocation || null,
+              reportingStructure: cAny.reportingStructure || null,
+              source: 'linkedin',
+              confidenceScore: (contact.confidence || 80) / 100,
+              type: 'direct',
+            },
+          });
+          optInContactCount++;
+        }
+      }
+    }
+
+    if (optInContactCount > 0) {
+      console.log(`[Scrape] Saved ${optInContactCount} opt-in contacts`);
+    }
+
+    // Save Scraped Documents
+    let savedDocumentCount = 0;
+    if (content.extractedDocuments) {
+      for (const doc of content.extractedDocuments) {
+        await prisma.document.create({
+          data: {
+            brandId,
+            title: doc.title || 'Unknown Document',
+            url: doc.url,
+            type: doc.type || 'other',
+          },
+        });
+        savedDocumentCount++;
+      }
+    }
+    console.log(`[Scrape] Saved ${savedDocumentCount} documents`);
+
     // Update brand with fresh scraped data and set status to "analyzed"
     await prisma.brand.update({
       where: { id: brandId },
@@ -195,17 +282,6 @@ export async function scrapeBrand(brandId: string) {
       },
     });
 
-    // Automatically trigger AI Website Analysis and Gap Detection (Match Score)
-    try {
-      console.log(`[Scrape] Auto-triggering AI Analysis & Gap Detection for ${brand.name}...`);
-      const { runWebsiteAnalysis, runGapDetection } = await import('@/actions/ai-actions');
-      const analysisResult = await runWebsiteAnalysis(brandId);
-      if (analysisResult.success) {
-        await runGapDetection(brandId);
-      }
-    } catch (e) {
-      console.warn('[Scrape] Auto-AI execution failed:', e instanceof Error ? e.message : e);
-    }
 
     revalidatePath(`/brands/${brandId}`);
     revalidatePath('/brands');

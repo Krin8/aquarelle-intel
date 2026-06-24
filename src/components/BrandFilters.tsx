@@ -77,6 +77,26 @@ export function BrandFilters({
             ))}
           </>
         )}
+        
+        <span style={{ width: '1px', background: 'var(--border-subtle)', margin: '0 4px' }}></span>
+        
+        <select 
+          className="filter-chip"
+          style={{ background: 'transparent', cursor: 'pointer' }}
+          value={searchParams.get('minScore') || ''}
+          onChange={(e) => updateFilter('minScore', e.target.value)}
+        >
+          <option value="">Any Match Score</option>
+          <option value="50">Score &gt; 50%</option>
+          <option value="80">Score &gt; 80%</option>
+        </select>
+
+        <button
+          className={`filter-chip ${searchParams.get('hasContacts') === 'true' ? 'active' : ''}`}
+          onClick={() => updateFilter('hasContacts', searchParams.get('hasContacts') === 'true' ? '' : 'true')}
+        >
+          Has Contacts 👤
+        </button>
       </div>
     </div>
   );

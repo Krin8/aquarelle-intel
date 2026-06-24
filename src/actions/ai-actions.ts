@@ -4,6 +4,7 @@ import prisma from '@/lib/db';
 import { analyzeWebsite } from '@/lib/ai/analyzers/website-analyzer';
 import { detectGaps } from '@/lib/ai/analyzers/gap-detector';
 import { generatePitchAngles } from '@/lib/ai/analyzers/pitch-generator';
+import { answerBrandQuestion } from '@/lib/ai/analyzers/qa-analyzer';
 import { checkOllamaHealth } from '@/lib/ai/ollama-client';
 import { revalidatePath } from 'next/cache';
 
@@ -11,7 +12,17 @@ export async function getGeminiStatus() {
   return checkOllamaHealth();
 }
 
-export async function runWebsiteAnalysis(brandId: string) {
+export async function runWebsiteAnalysis(brandId: string, preFetchedModelPref?: 'ollama' | 'gemini') {
+  let modelPref = preFetchedModelPref;
+  if (!modelPref) {
+    try {
+      const { getModelPreference } = await import('@/actions/settings-actions');
+      modelPref = await getModelPreference();
+    } catch (e) {
+      modelPref = 'gemini';
+    }
+  }
+
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
     include: { scrapeLogs: { where: { status: 'success' }, orderBy: { scrapedAt: 'desc' }, take: 1 } },
@@ -37,7 +48,8 @@ export async function runWebsiteAnalysis(brandId: string) {
     const { analysis, rawResponse, model } = await analyzeWebsite(
       scrapeResult.content.markdown,
       brand.name,
-      brand.website
+      brand.website,
+      modelPref
     );
 
     // Store analysis
@@ -73,7 +85,17 @@ export async function runWebsiteAnalysis(brandId: string) {
   }
 }
 
-export async function runGapDetection(brandId: string) {
+export async function runGapDetection(brandId: string, preFetchedModelPref?: 'ollama' | 'gemini') {
+  let modelPref = preFetchedModelPref;
+  if (!modelPref) {
+    try {
+      const { getModelPreference } = await import('@/actions/settings-actions');
+      modelPref = await getModelPreference();
+    } catch (e) {
+      modelPref = 'gemini';
+    }
+  }
+
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
     include: {
@@ -87,15 +109,34 @@ export async function runGapDetection(brandId: string) {
 
   if (!brand) return { error: 'Brand not found' };
 
-  const websiteAnalysis = brand.aiAnalyses[0];
+  let websiteAnalysis = brand.aiAnalyses[0];
   if (!websiteAnalysis) {
-    return { error: 'Run website analysis first before gap detection.' };
+    console.log(`[AI] Gap Detection triggered, but Website Analysis missing. Auto-running...`);
+    const analysisResult = await runWebsiteAnalysis(brandId, modelPref);
+    if (analysisResult.error) {
+      return { error: 'Prerequisite Website Analysis failed: ' + analysisResult.error };
+    }
+    
+    const updatedBrand = await prisma.brand.findUnique({
+      where: { id: brandId },
+      include: {
+        aiAnalyses: { where: { analysisType: 'website_understanding' }, orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+    websiteAnalysis = updatedBrand?.aiAnalyses[0];
+    
+    if (!websiteAnalysis) {
+      return { error: 'Run website analysis first before gap detection.' };
+    }
   }
 
   try {
     const { detection, rawResponse, model } = await detectGaps(
       websiteAnalysis.structuredData || websiteAnalysis.response,
-      brand.name
+      brand.name,
+      brand.customerType,
+      brand.pipelineData || undefined,
+      modelPref
     );
 
     const stored = await prisma.aIAnalysis.create({
@@ -125,7 +166,17 @@ export async function runGapDetection(brandId: string) {
   }
 }
 
-export async function runPitchGeneration(brandId: string, templateId?: string) {
+export async function runPitchGeneration(brandId: string, templateId?: string, preFetchedModelPref?: 'ollama' | 'gemini') {
+  let modelPref = preFetchedModelPref;
+  if (!modelPref) {
+    try {
+      const { getModelPreference } = await import('@/actions/settings-actions');
+      modelPref = await getModelPreference();
+    } catch (e) {
+      modelPref = 'gemini';
+    }
+  }
+
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
     include: {
@@ -166,7 +217,10 @@ export async function runPitchGeneration(brandId: string, templateId?: string) {
       brand.name,
       websiteAnalysis.structuredData || websiteAnalysis.response,
       gapDetection?.structuredData || gapDetection?.response || 'No gap detection available',
-      customPrompt
+      brand.customerType,
+      brand.pipelineData || undefined,
+      customPrompt,
+      modelPref
     );
 
     const stored = await prisma.aIAnalysis.create({
@@ -189,6 +243,65 @@ export async function runPitchGeneration(brandId: string, templateId?: string) {
   }
 }
 
+import { scorePipeline } from '@/lib/ai/analyzers/pipeline-scorer';
+
+export async function runPipelineScoring(brandId: string) {
+  let modelPref: 'ollama' | 'gemini' = 'gemini';
+  try {
+    const { getModelPreference } = await import('@/actions/settings-actions');
+    modelPref = await getModelPreference();
+  } catch (e) {}
+
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId },
+    include: {
+      aiAnalyses: {
+        where: { analysisType: { in: ['website_understanding', 'gap_detection'] } },
+        orderBy: { createdAt: 'desc' },
+      },
+    },
+  });
+
+  if (!brand) return { error: 'Brand not found' };
+
+  const websiteAnalysis = brand.aiAnalyses.find(a => a.analysisType === 'website_understanding');
+  const gapDetection = brand.aiAnalyses.find(a => a.analysisType === 'gap_detection');
+
+  if (!websiteAnalysis) return { error: 'Website analysis must be run first.' };
+  if (!gapDetection) return { error: 'Gap detection must be run first.' };
+
+  try {
+    const { scoring, rawResponse, model } = await scorePipeline(
+      brand.name,
+      websiteAnalysis.structuredData || websiteAnalysis.response,
+      gapDetection.structuredData || gapDetection.response,
+      modelPref
+    );
+
+    const stored = await prisma.aIAnalysis.create({
+      data: {
+        brandId,
+        analysisType: 'pipeline_scoring',
+        prompt: `Score Pipeline Potential for: ${brand.name}`,
+        response: rawResponse,
+        structuredData: JSON.stringify(scoring),
+        modelUsed: model,
+      },
+    });
+
+    // Save directly to the brand record
+    await prisma.brand.update({
+      where: { id: brandId },
+      data: { pipelineScore: scoring.grossTotalPoints },
+    });
+
+    revalidatePath(`/brands/${brandId}`);
+    return { success: true, scoring, analysisId: stored.id };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Pipeline scoring failed' };
+  }
+}
+
 export async function submitFeedback(analysisId: string, rating: 'thumbs_up' | 'thumbs_down') {
   try {
     const analysis = await prisma.aIAnalysis.findUnique({ where: { id: analysisId } });
@@ -208,5 +321,97 @@ export async function submitFeedback(analysisId: string, rating: 'thumbs_up' | '
     return { success: true, newRating };
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to submit feedback' };
+  }
+}
+
+export async function askBrandQuestion(brandId: string, question: string) {
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId },
+    include: {
+      scrapeLogs: { where: { status: 'success' }, orderBy: { scrapedAt: 'desc' }, take: 1 },
+      aiAnalyses: {
+        where: { analysisType: 'website_understanding' },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    },
+  });
+
+  if (!brand) return { error: 'Brand not found' };
+
+  // Get scraped markdown content
+  const { scrapeUrl } = await import('@/lib/scraper');
+  const scrapeResult = await scrapeUrl(brand.website);
+
+  if (!scrapeResult.success || !scrapeResult.content) {
+    return { error: 'No website content available. Please scrape the brand first.' };
+  }
+
+  const existingAnalysis = brand.aiAnalyses[0]?.structuredData || null;
+
+  try {
+    const { answer, rawResponse, model } = await answerBrandQuestion(
+      question,
+      scrapeResult.content.markdown,
+      brand.name,
+      existingAnalysis
+    );
+
+    // Store Q&A as an AIAnalysis record
+    const stored = await prisma.aIAnalysis.create({
+      data: {
+        brandId,
+        analysisType: 'qa_answer',
+        prompt: question,
+        response: rawResponse,
+        structuredData: JSON.stringify(answer),
+        modelUsed: model,
+      },
+    });
+
+    revalidatePath(`/brands/${brandId}`);
+
+    return { success: true, answer, analysisId: stored.id };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to answer question' };
+  }
+}
+
+export async function generateDraft(brandId: string, contactId: string, stage: 1 | 2 = 1) {
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId },
+    include: {
+      contacts: { where: { id: contactId } },
+      aiAnalyses: {
+        where: { analysisType: 'gap_detection' },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    },
+  });
+
+  if (!brand || brand.contacts.length === 0) return { error: 'Brand or Contact not found' };
+  
+  const contact = brand.contacts[0];
+  const latestGapDetection = brand.aiAnalyses[0];
+  
+  if (!latestGapDetection || !latestGapDetection.structuredData) {
+    return { error: 'No Gap Detection analysis found. Please run Gap Detection first.' };
+  }
+
+  try {
+    const { generateColdEmail } = await import('@/lib/ai/analyzers/email-generator');
+    const { result, rawResponse, model } = await generateColdEmail(
+      brand.name,
+      contact.name,
+      contact.role,
+      contact.department,
+      JSON.parse(latestGapDetection.structuredData),
+      stage
+    );
+
+    return { success: true, draft: result };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to generate email draft' };
   }
 }

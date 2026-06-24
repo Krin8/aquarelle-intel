@@ -14,6 +14,7 @@ model Brand {
   linkedinUrl      String?
   logoUrl          String?
   status           String   @default("discovered") // discovered | researching | analyzed | qualified | rejected
+  customerType     String   @default("new") // existing | pipeline | new
   region           String   @default("Global")
   segment          String?  // luxury | premium | mid-range | value | fast-fashion
   priceRange       String?  // e.g. "$50-$200"
@@ -22,6 +23,9 @@ model Brand {
   lastScrapedAt    DateTime?
   dataFreshness    Int      @default(0) // 0-100
   matchScore       Int?     // 0-100, set by AI gap detection
+  pipelineScore    Int?     // priority score from SOP pipeline data
+  pipelineData     String?  // JSON blob of imported SOP financial data (CPU, margin, FOB, ROS%)
+  marketGrade      String?  // A, B, C, D from market segmentation
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -30,6 +34,7 @@ model Brand {
   notes       Note[]
   aiAnalyses  AIAnalysis[]
   scrapeLogs  ScrapeLog[]
+  documents   Document[]
 
   @@index([status])
   @@index([region])
@@ -59,9 +64,14 @@ model Contact {
   brandId         String
   name            String
   role            String? // e.g. "Head of Wholesale", "Buying Director"
+  department      String? // e.g. "Wholesale/B2B", "Sales", "Merchandising/Buying", "Executive/C-Suite", "Marketing", "Other"
+  seniority       String? // e.g. "C-Level", "VP", "Director", "Manager", "Individual Contributor"
   email           String?
   phone           String?
   linkedinUrl     String?
+  officeLocation  String?
+  reportingStructure String?
+  mutualConnections String?
   buyerType       String  @default("unknown") // decision_maker | influencer | gatekeeper | unknown
   type            String  @default("direct") // direct | generic | phone
   confidenceScore Float   @default(0.3) // 0-1
@@ -139,4 +149,29 @@ model PitchTemplate {
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  brandId     String
+  type        String   // catalog | lookbook | investor_report | other
+  title       String
+  url         String
+  scrapedAt   DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  @@index([brandId])
+}
+
+model Integration {
+  id          String   @id @default(cuid())
+  provider    String   // salesforce | wfx
+  status      String   @default("disconnected") // connected | disconnected
+  lastSyncAt  DateTime?
+  accessToken String?
+  tenantId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([provider])
 }

@@ -9,7 +9,7 @@ export async function checkRobotsTxt(url: string): Promise<{
     
     const response = await fetch(robotsUrl, {
       headers: {
-        'User-Agent': 'LagunaIntel/1.0',
+        'User-Agent': 'CIELTextilesIntel/1.0',
       },
       signal: AbortSignal.timeout(5000),
     });
@@ -31,7 +31,7 @@ export async function checkRobotsTxt(url: string): Promise<{
       
       if (trimmed.startsWith('user-agent:')) {
         const agent = trimmed.replace('user-agent:', '').trim();
-        isRelevantAgent = agent === '*' || agent.includes('lagunaintel');
+        isRelevantAgent = agent === '*' || agent.includes('cieltextilesintel');
       }
       
       if (isRelevantAgent && trimmed.startsWith('disallow:')) {

@@ -1,11 +1,12 @@
 import json
 from itemadapter import ItemAdapter
-from laguna_crawler.items import PageItem, ContactItem
+from laguna_crawler.items import PageItem, ContactItem, DocumentItem
 
 class JsonOutputPipeline:
     def __init__(self):
         self.pages = []
         self.contacts = []
+        self.documents = []
 
     def process_item(self, item, spider):
         adapter = ItemAdapter(item)
@@ -13,6 +14,8 @@ class JsonOutputPipeline:
             self.pages.append(adapter.asdict())
         elif isinstance(item, ContactItem):
             self.contacts.append(adapter.asdict())
+        elif isinstance(item, DocumentItem):
+            self.documents.append(adapter.asdict())
         return item
 
     def close_spider(self, spider):
@@ -23,7 +26,8 @@ class JsonOutputPipeline:
             "success": True,
             "data": {
                 "pages": self.pages,
-                "contacts": self.contacts
+                "contacts": self.contacts,
+                "documents": self.documents
             }
         }
         print(json.dumps(result))

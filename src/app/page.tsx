@@ -35,7 +35,7 @@ export default async function DashboardPage() {
         <div className="page-header-content">
           <h1 className="page-title">Intelligence Dashboard</h1>
           <p className="page-subtitle">
-            Market intelligence overview for Laguna&apos;s brand discovery pipeline
+            Market intelligence overview for CIEL Textiles&apos;s brand discovery pipeline
           </p>
         </div>
         <Link href="/brands/new" className="btn btn-primary">

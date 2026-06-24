@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { generateStructuredResponse } from '../ai/ollama-client';
+import { generateStructuredResponse } from '../ai/router';
 import { URL } from 'url';
 
 // Use stealth to avoid DDG blocks
@@ -10,7 +10,7 @@ puppeteer.use(StealthPlugin());
  * Automatically searches for and extracts the corporate/parent website 
  * domain for a given brand name using a hybrid Search + AI approach.
  */
-export async function findCorporateUrl(brandName: string, retailUrl: string): Promise<string | null> {
+export async function findCorporateUrl(brandName: string, retailUrl: string, modelPref?: 'ollama' | 'gemini'): Promise<string | null> {
   let browser;
   try {
     browser = await puppeteer.launch({ 
@@ -66,7 +66,8 @@ Respond in JSON format: { "bestUrl": "https://..." } (or null if none found).
     const { result } = await generateStructuredResponse<{ bestUrl: string | null }>(
       "You are an expert corporate researcher.",
       prompt,
-      (text) => JSON.parse(text)
+      (text) => JSON.parse(text),
+      modelPref
     );
 
     if (!result.bestUrl) return null;

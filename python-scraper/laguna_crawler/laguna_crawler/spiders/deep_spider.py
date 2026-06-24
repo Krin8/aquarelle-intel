@@ -2,7 +2,7 @@ import re
 from urllib.parse import urlparse
 from scrapy.spiders import CrawlSpider, Rule
 from scrapy.linkextractors import LinkExtractor
-from laguna_crawler.items import PageItem, ContactItem
+from laguna_crawler.items import PageItem, ContactItem, DocumentItem
 from markdownify import markdownify as md
 
 class DeepSpider(CrawlSpider):
@@ -158,3 +158,42 @@ class DeepSpider(CrawlSpider):
                 source_url=response.url,
                 type="phone"
             )
+
+        # Document Extraction
+        links = response.xpath('//a[@href]')
+        found_docs = set()
+        
+        for link in links:
+            href = link.xpath('@href').get()
+            text = ' '.join(link.xpath('.//text()').getall()).strip().lower()
+            if not href:
+                continue
+                
+            href_lower = href.lower()
+            doc_type = None
+            
+            if href_lower.endswith('.pdf') or 'catalog' in href_lower or 'lookbook' in href_lower:
+                if 'catalog' in text or 'catalog' in href_lower:
+                    doc_type = 'catalog'
+                elif 'lookbook' in text or 'lookbook' in href_lower:
+                    doc_type = 'lookbook'
+                elif 'investor' in text or 'annual' in text or 'report' in text:
+                    doc_type = 'investor_report'
+                else:
+                    doc_type = 'other'
+            
+            if doc_type:
+                full_url = response.urljoin(href)
+                if full_url in found_docs:
+                    continue
+                found_docs.add(full_url)
+                
+                title = text if len(text) > 2 else full_url.split('/')[-1]
+                if len(title) > 200:
+                    title = title[:197] + "..."
+                    
+                yield DocumentItem(
+                    url=full_url,
+                    title=title,
+                    type=doc_type
+                )

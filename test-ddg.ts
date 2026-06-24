@@ -1,18 +1,23 @@
-import * as cheerio from 'cheerio';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+puppeteer.use(StealthPlugin());
 
-async function test() {
-  const query = "Tommy Hilfiger corporate contact";
-  const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
+async function main() {
+  const browser = await puppeteer.launch({ headless: true });
+  const page = await browser.newPage();
+  
+  await page.goto(`https://duckduckgo.com/?q=${encodeURIComponent('site:linkedin.com/in "Snitch" OR snitch.com')}&t=h_&ia=web`, { waitUntil: 'networkidle2' });
+  
+  const results = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('[data-testid="result"]')).slice(0, 10).map((el: any) => {
+        const title = el.querySelector('h2')?.innerText || '';
+        const url = el.querySelector('a')?.href || '';
+        const snippet = el.innerText || '';
+        return { title, url, snippet };
+      });
   });
-  const html = await response.text();
-  const $ = cheerio.load(html);
-  const results: string[] = [];
-  $('.result__url').each((i, el) => {
-    results.push($(el).text().trim());
-  });
-  console.log(results);
+  console.log("Results:", results);
+  
+  await browser.close();
 }
-test().catch(console.error);
+main();

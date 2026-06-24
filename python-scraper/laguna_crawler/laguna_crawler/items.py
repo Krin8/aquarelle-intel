@@ -19,3 +19,8 @@ class PageItem(scrapy.Item):
     links = scrapy.Field()
     images = scrapy.Field()
     content_length = scrapy.Field()
+
+class DocumentItem(scrapy.Item):
+    url = scrapy.Field()
+    title = scrapy.Field()
+    type = scrapy.Field() # catalog, lookbook, investor_report, other

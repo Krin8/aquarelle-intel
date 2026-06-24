@@ -1,4 +1,4 @@
-import { generateStructuredResponse } from '../ollama-client';
+import { generateStructuredResponse } from '../router';
 import { WebsiteAnalysisSchema, type WebsiteAnalysis } from '../../normalizer/schemas';
 
 const SYSTEM_PROMPT = `You are a market intelligence analyst specializing in apparel and fashion brands. 
@@ -7,7 +7,7 @@ Always respond with valid JSON matching the requested schema exactly.
 Be precise about pricing, segments, and target demographics.
 If information is not clearly available, make reasonable inferences from the content and mark them as such.`;
 
-export async function analyzeWebsite(markdown: string, brandName: string, websiteUrl: string): Promise<{
+export async function analyzeWebsite(markdown: string, brandName: string, websiteUrl: string, modelPref?: 'ollama' | 'gemini'): Promise<{
   analysis: WebsiteAnalysis;
   rawResponse: string;
   model: string;
@@ -41,7 +41,8 @@ Respond with a JSON object containing these fields:
     (text: string) => {
       const parsed = JSON.parse(text);
       return WebsiteAnalysisSchema.parse(parsed);
-    }
+    },
+    modelPref
   );
 
   return { analysis: result, rawResponse, model };

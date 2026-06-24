@@ -60,6 +60,21 @@ export async function updateBrandStatus(brandId: string, status: string) {
   }
 }
 
+export async function updateCustomerType(brandId: string, customerType: string) {
+  try {
+    await prisma.brand.update({
+      where: { id: brandId },
+      data: { customerType },
+    });
+    revalidatePath(`/brands/${brandId}`);
+    revalidatePath('/brands');
+    revalidatePath('/');
+    return { success: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update customer type' };
+  }
+}
+
 export async function updateCorporateUrl(brandId: string, corporateUrl: string | null) {
   try {
     await prisma.brand.update({
@@ -86,6 +101,20 @@ export async function updateLinkedinUrl(brandId: string, linkedinUrl: string | n
   }
 }
 
+export async function updateContactConnections(contactId: string, mutualConnections: string | null) {
+  try {
+    const contact = await prisma.contact.update({
+      where: { id: contactId },
+      data: { mutualConnections },
+      select: { brandId: true }
+    });
+    revalidatePath(`/brands/${contact.brandId}`);
+    return { success: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update mutual connections' };
+  }
+}
+
 export async function deleteBrand(brandId: string) {
   try {
     await prisma.brand.delete({
@@ -103,8 +132,10 @@ export async function getBrands(filters?: {
   status?: string;
   region?: string;
   search?: string;
+  minScore?: string;
+  hasContacts?: string;
 }) {
-  const where: Record<string, unknown> = {};
+  const where: any = {};
 
   if (filters?.status && filters.status !== 'all') {
     where.status = filters.status;
@@ -117,6 +148,12 @@ export async function getBrands(filters?: {
       { name: { contains: filters.search } },
       { website: { contains: filters.search } },
     ];
+  }
+  if (filters?.minScore) {
+    where.matchScore = { gte: parseInt(filters.minScore, 10) };
+  }
+  if (filters?.hasContacts === 'true') {
+    where.contacts = { some: {} };
   }
 
   return prisma.brand.findMany({
@@ -144,6 +181,85 @@ export async function getBrand(id: string) {
       aiAnalyses: { orderBy: { createdAt: 'desc' } },
       notes: { orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }] },
       scrapeLogs: { orderBy: { scrapedAt: 'desc' }, take: 10 },
+      documents: { orderBy: { scrapedAt: 'desc' } },
     },
   });
+}
+
+import { parse } from 'csv-parse/sync';
+
+export async function importApolloCsv(brandId: string, csvText: string) {
+  try {
+    const records = parse(csvText, {
+      columns: true,
+      skip_empty_lines: true,
+      relax_quotes: true,
+      relax_column_count: true
+    });
+
+    let importedCount = 0;
+
+    for (const record of records) {
+      // Apollo CSVs usually have: 'First Name', 'Last Name', 'Title', 'Email', 'Phone', 'LinkedIn Url'
+      const firstName = record['First Name'] || '';
+      const lastName = record['Last Name'] || '';
+      const name = `${firstName} ${lastName}`.trim();
+      if (!name) continue;
+
+      const role = record['Title'] || null;
+      const email = record['Email'] || null;
+      const phone = record['Corporate Phone'] || record['Mobile Phone'] || record['Phone'] || null;
+      const linkedinUrl = record['Person Linkedin Url'] || record['LinkedIn Url'] || null;
+      const city = record['City'] || '';
+      const state = record['State'] || '';
+      const officeLocation = [city, state].filter(Boolean).join(', ') || null;
+
+      let buyerType = 'influencer';
+      if (role && /director|vp|vice president|head|chief|founder/i.test(role)) {
+        buyerType = 'decision_maker';
+      }
+
+      const existing = await prisma.contact.findFirst({
+        where: { brandId, name }
+      });
+
+      if (existing) {
+        await prisma.contact.update({
+          where: { id: existing.id },
+          data: {
+            role: role || existing.role,
+            email: email || existing.email,
+            phone: phone || existing.phone,
+            linkedinUrl: linkedinUrl || existing.linkedinUrl,
+            officeLocation: officeLocation || existing.officeLocation,
+            confidenceScore: 0.99,
+            source: 'apollo'
+          }
+        });
+      } else {
+        await prisma.contact.create({
+          data: {
+            brandId,
+            name,
+            role,
+            email,
+            phone,
+            linkedinUrl,
+            officeLocation,
+            buyerType,
+            confidenceScore: 0.99,
+            type: 'direct',
+            source: 'apollo'
+          }
+        });
+      }
+      importedCount++;
+    }
+
+    revalidatePath(`/brand/${brandId}`);
+    return { success: true, count: importedCount };
+  } catch (error: any) {
+    console.error('Failed to parse Apollo CSV:', error);
+    return { success: false, error: error.message };
+  }
 }
