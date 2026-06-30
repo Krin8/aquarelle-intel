@@ -5,6 +5,9 @@ import { scrapeUrl } from '@/lib/scraper';
 import { scoreConfidence, getContactConfidence } from '@/lib/normalizer/confidence-scorer';
 import { extractContacts, findContactsFromKnowledge } from '@/lib/ai/analyzers/contact-extractor';
 import { extractCompanyOverview } from '@/lib/ai/analyzers/company-overview-extractor';
+import { filterShirts } from '@/lib/scraper/shirt-filter';
+import { categorizeProducts } from '@/lib/ai/analyzers/product-categorizer';
+import { convertToUSD } from '@/lib/scraper/fx-converter';
 import { findDomainAndPatternWithHunter, findDomainPatternWithHunter, findRobustDomainPattern, generateEmail, deriveEmailPattern } from '@/lib/normalizer/email-pattern';
 import { revalidatePath } from 'next/cache';
 
@@ -171,36 +174,52 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
           }
         }
         
-        let hunterDomain = '';
-        let hunterPattern = 'unknown';
+        let hunterDomain = brand.emailDomain || '';
+        let hunterPattern = brand.emailPattern || 'unknown';
 
-        // Try to derive the pattern for each candidate domain. 
-        for (const domain of candidateDomains) {
-          console.log(`[Scrape] Testing domain candidate: ${domain}`);
-          let hRes = await findDomainAndPatternWithHunter(domain);
-          let hPattern = hRes ? hRes.pattern : null;
-          
-          // Grab up to 3 valid persons as samples
-          const samplePersons = [];
-          for (const c of aiContacts) {
-            if (c.name && samplePersons.length < 3) {
-              const parts = c.name.trim().split(' ');
-              if (parts.length >= 2) samplePersons.push({ name: c.name, firstName: parts[0], lastName: parts.slice(1).join(' ') });
+        if (hunterPattern !== 'unknown' && hunterDomain) {
+          console.log(`[Scrape] Bypassing Hunter API. Using cached email pattern '${hunterPattern}' for domain ${hunterDomain}`);
+        } else {
+          // Try to derive the pattern for each candidate domain. 
+          for (const domain of candidateDomains) {
+            console.log(`[Scrape] Testing domain candidate: ${domain}`);
+            let hRes = await findDomainAndPatternWithHunter(domain);
+            let hPattern = hRes ? hRes.pattern : null;
+            
+            // Grab up to 3 valid persons as samples
+            const samplePersons = [];
+            for (const c of aiContacts) {
+              if (c.name && samplePersons.length < 3) {
+                const parts = c.name.trim().split(' ');
+                if (parts.length >= 2) samplePersons.push({ name: c.name, firstName: parts[0], lastName: parts.slice(1).join(' ') });
+              }
+            }
+
+            const { pattern: derivedPattern, domain: verifiedDomain } = await findRobustDomainPattern(domain, samplePersons);
+            
+            // If we got a robust pattern (not unknown, and not the bad {first} fallback)
+            if (derivedPattern !== 'unknown' && derivedPattern !== '{first}') {
+              hunterDomain = verifiedDomain || domain;
+              hunterPattern = derivedPattern;
+              console.log(`[Scrape] Successfully locked domain ${domain} with robust pattern ${derivedPattern}`);
+              break; // Stop testing other domains, we found a winner!
+            } else if (hPattern && hPattern !== 'unknown' && hPattern !== '{first}' && hunterPattern === 'unknown') {
+              // Keep this as a fallback if the robust check completely failed across all domains
+              hunterDomain = domain;
+              hunterPattern = hPattern;
             }
           }
-
-          const { pattern: derivedPattern, domain: verifiedDomain } = await findRobustDomainPattern(domain, samplePersons);
           
-          // If we got a robust pattern (not unknown, and not the bad {first} fallback)
-          if (derivedPattern !== 'unknown' && derivedPattern !== '{first}') {
-            hunterDomain = verifiedDomain || domain;
-            hunterPattern = derivedPattern;
-            console.log(`[Scrape] Successfully locked domain ${domain} with robust pattern ${derivedPattern}`);
-            break; // Stop testing other domains, we found a winner!
-          } else if (hPattern && hPattern !== 'unknown' && hPattern !== '{first}' && hunterPattern === 'unknown') {
-            // Keep this as a fallback if the robust check completely failed across all domains
-            hunterDomain = domain;
-            hunterPattern = hPattern;
+          if (hunterPattern !== 'unknown' && hunterDomain) {
+            // Save the newly found domain and pattern to the brand for next time
+            await prisma.brand.update({
+              where: { id: brandId },
+              data: {
+                emailDomain: hunterDomain,
+                emailPattern: hunterPattern
+              }
+            });
+            console.log(`[Scrape] Cached new email pattern '${hunterPattern}' for domain ${hunterDomain} on brand ${brand.name}`);
           }
         }
 
@@ -375,17 +394,28 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
       await prisma.product.deleteMany({
         where: { brandId }
       });
+      // 1. Keyword Pre-Filter (fast, cheap)
+      const validShirts = filterShirts(content.extractedProducts);
       
-      for (const prod of content.extractedProducts) {
+      // 2. AI Categorization (casual, denim/indigo, prints)
+      const categorizedShirts = await categorizeProducts(validShirts, brand.name);
+      
+      for (const prod of categorizedShirts) {
         if (!prod.imageUrl || !prod.sourceUrl) continue; // skip broken products
+        
+        // 3. FX Conversion to USD
+        const priceUSD = await convertToUSD(prod.localPrice, prod.currency || 'USD');
+        
         await prisma.product.create({
           data: {
             brandId,
             name: prod.name || 'Unknown Product',
-            priceMin: prod.priceMin || null,
+            localPrice: prod.localPrice || null,
+            currency: prod.currency || 'USD',
+            priceMin: priceUSD || null,
             imageUrl: prod.imageUrl || null,
             sourceUrl: prod.sourceUrl || null,
-            category: prod.category || null,
+            category: prod.category || 'other',
           },
         });
         savedProductCount++;

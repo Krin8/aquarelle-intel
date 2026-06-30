@@ -273,7 +273,7 @@ export function RegionScanClient({ initialBrands }: { initialBrands: RegionBrand
                 <div style={{
                   width: `${progressPercent}%`,
                   height: '100%',
-                  background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-indigo))',
+                  background: 'var(--text-primary)',
                   borderRadius: '4px',
                   transition: 'width 0.5s ease',
                 }} />
@@ -299,9 +299,9 @@ export function RegionScanClient({ initialBrands }: { initialBrands: RegionBrand
                   fontSize: '11px',
                   padding: '2px 8px',
                   borderRadius: '10px',
-                  background: 'rgba(52, 211, 153, 0.1)',
-                  color: 'var(--accent-emerald)',
-                  border: '1px solid rgba(52, 211, 153, 0.2)',
+                  background: 'var(--bg-hover)',
+                  borderRadius: 'var(--radius-lg)',
+                  border: '1px solid var(--border-subtle)',
                 }}>
                   ✓ {name}
                 </span>

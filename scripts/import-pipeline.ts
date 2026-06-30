@@ -13,7 +13,7 @@ async function main() {
   
   // The JSON has some malformed sections (array with object syntax).
   // We need to fix these before parsing. Replace the problematic "Pipeline Review format" section.
-  const fixed = raw.replace(/"Pipeline Review format":\[\s*"[^}]*?\]/s, '"Pipeline Review format":[]');
+  const fixed = raw.replace(/"Pipeline Review format":\[[\s\S]*?\]/, '"Pipeline Review format":[]');
   
   let data: any;
   try {

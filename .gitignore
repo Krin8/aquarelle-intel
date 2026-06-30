@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+.puppeteer_data/
+ae-screenshot.png
+python-scraper/scrapy_gant_log.txt

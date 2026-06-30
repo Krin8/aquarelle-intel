@@ -103,7 +103,7 @@ export function SupplierIntelligenceDashboard({ brandId }: { brandId: string }) 
           {/* Detailed View */}
           {selectedSupplier && (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{ padding: 'var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', background: 'linear-gradient(to right, rgba(245, 158, 11, 0.05), transparent)' }}>
+              <div style={{ padding: 'var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-hover)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
@@ -141,13 +141,13 @@ export function SupplierIntelligenceDashboard({ brandId }: { brandId: string }) 
                       <div style={{ fontSize: '13px', color: 'var(--accent-amber)' }}>{selectedSupplier.winStrategy.likelyPainPoints}</div>
                     </div>
 
-                    <div style={{ marginBottom: 'var(--space-xl)', padding: 'var(--space-sm)', background: 'rgba(244, 63, 94, 0.05)', borderLeft: '3px solid var(--accent-rose)' }}>
+                    <div style={{ marginBottom: 'var(--space-xl)', padding: 'var(--space-sm)', background: 'var(--bg-hover)', borderLeft: '3px solid var(--accent-rose)' }}>
                       <strong style={{ fontSize: '12px', color: 'var(--text-primary)', display: 'block' }}>Vulnerabilities:</strong>
                       <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{selectedSupplier.winStrategy.vulnerabilities}</div>
                     </div>
 
                     <h4 style={{ fontSize: '14px', textTransform: 'uppercase', color: 'var(--accent-emerald)', marginBottom: 'var(--space-md)' }}>Aquarelle Win Strategy</h4>
-                    <div style={{ marginBottom: 'var(--space-md)', padding: 'var(--space-sm)', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid var(--accent-emerald)', borderRadius: '6px' }}>
+                    <div style={{ marginBottom: 'var(--space-md)', padding: 'var(--space-sm)', background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', borderRadius: '6px' }}>
                       <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
                         {selectedSupplier.winStrategy.whatAquarelleDoesBetter}
                       </div>
@@ -216,7 +216,7 @@ export function SupplierIntelligenceDashboard({ brandId }: { brandId: string }) 
                       <div key={gap.id} style={{ padding: 'var(--space-sm)', background: 'var(--bg-card)', borderLeft: `3px solid var(--accent-cyan)`, borderRadius: '4px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                           <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>{gap.gapCategory} Gap</span>
-                          {gap.canAquarelleSolveIt && <span style={{ fontSize: '11px', color: 'var(--accent-emerald)', background: 'rgba(16,185,129,0.1)', padding: '2px 4px', borderRadius: '4px' }}>Aquarelle Advantage</span>}
+                          {gap.canAquarelleSolveIt && <span style={{ fontSize: '11px', color: 'var(--accent-emerald)', background: 'var(--bg-hover)', border: '1px solid var(--accent-emerald)', padding: '2px 4px', borderRadius: '4px' }}>Aquarelle Advantage</span>}
                         </div>
                         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>{gap.description}</div>
                         <div style={{ fontSize: '11px', color: 'var(--accent-cyan)' }}><strong>Action:</strong> {gap.aquarelleCapability}</div>

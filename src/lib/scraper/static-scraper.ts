@@ -12,6 +12,7 @@ export interface ScrapedContent {
   phones: string[];
   links: { text: string; href: string }[];
   images: { alt: string; src: string }[];
+  products?: any[];
   contentLength: number;
 }
 

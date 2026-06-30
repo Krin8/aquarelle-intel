@@ -51,7 +51,9 @@ export function Sidebar({ initialModel = 'ollama' }: { initialModel?: 'ollama' |
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">◆</div>
+        <div className="sidebar-logo-icon" style={{ position: 'relative', width: '36px', height: '36px', background: 'white', borderRadius: '4px', overflow: 'hidden' }}>
+          <img src="/logo.jpeg" alt="Aquarelle Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        </div>
         <span className="sidebar-logo-text">Aquarelle</span>
         <span className="sidebar-logo-badge">INTEL</span>
       </div>
@@ -88,8 +90,8 @@ export function Sidebar({ initialModel = 'ollama' }: { initialModel?: 'ollama' |
             cursor: 'pointer', 
             padding: '8px', 
             borderRadius: '6px',
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-subtle)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',

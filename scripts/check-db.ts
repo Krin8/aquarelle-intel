@@ -1,4 +1,4 @@
-import prisma from './src/lib/db';
+import prisma from '../src/lib/db';
 
 async function checkBrands() {
   const brands = await prisma.brand.findMany({

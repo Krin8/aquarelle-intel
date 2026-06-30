@@ -208,25 +208,25 @@ export function CompetitorDashboard({ brandId }: { brandId: string }) {
                 <div>
                   <h4 style={{ fontSize: '14px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}>SWOT Analysis</h4>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
-                    <div style={{ padding: 'var(--space-sm)', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid var(--accent-emerald)', borderRadius: '8px' }}>
+                    <div style={{ padding: 'var(--space-sm)', background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }}>
                       <div style={{ color: 'var(--accent-emerald)', fontWeight: 600, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase' }}>Strengths</div>
                       <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                         {safeJsonParse(selectedComp.swotStrengths).map((item: string, i: number) => <li key={i}>{item}</li>)}
                       </ul>
                     </div>
-                    <div style={{ padding: 'var(--space-sm)', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid var(--accent-rose)', borderRadius: '8px' }}>
+                    <div style={{ padding: 'var(--space-sm)', background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }}>
                       <div style={{ color: 'var(--accent-rose)', fontWeight: 600, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase' }}>Weaknesses</div>
                       <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                         {safeJsonParse(selectedComp.swotWeaknesses).map((item: string, i: number) => <li key={i}>{item}</li>)}
                       </ul>
                     </div>
-                    <div style={{ padding: 'var(--space-sm)', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-cyan)', borderRadius: '8px' }}>
+                    <div style={{ padding: 'var(--space-sm)', background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }}>
                       <div style={{ color: 'var(--accent-cyan)', fontWeight: 600, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase' }}>Opportunities</div>
                       <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                         {safeJsonParse(selectedComp.swotOpps).map((item: string, i: number) => <li key={i}>{item}</li>)}
                       </ul>
                     </div>
-                    <div style={{ padding: 'var(--space-sm)', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid var(--accent-amber)', borderRadius: '8px' }}>
+                    <div style={{ padding: 'var(--space-sm)', background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }}>
                       <div style={{ color: 'var(--accent-amber)', fontWeight: 600, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase' }}>Threats</div>
                       <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                         {safeJsonParse(selectedComp.swotThreats).map((item: string, i: number) => <li key={i}>{item}</li>)}

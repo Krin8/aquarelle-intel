@@ -120,8 +120,9 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
                 display: 'flex',
                 alignItems: 'center',
                 padding: '12px 16px',
-                background: isSelected ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-card)',
-                border: `1px solid ${isSelected ? 'var(--accent-indigo)' : 'var(--border-color)'}`,
+                background: isSelected ? 'var(--bg-hover)' : 'var(--bg-surface)',
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${isSelected ? 'var(--accent-indigo)' : 'var(--border-subtle)'}`,
                 borderRadius: '8px',
                 gap: '16px',
                 transition: 'all 0.2s ease'
@@ -197,12 +198,12 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
           bottom: '32px',
           left: '50%',
           transform: 'translateX(-50%)',
-          background: 'rgba(30, 30, 35, 0.95)',
+          background: 'var(--bg-elevated)',
           backdropFilter: 'blur(12px)',
-          border: '1px solid var(--accent-indigo)',
+          border: '1px solid var(--border-default)',
           borderRadius: '12px',
           padding: '16px 24px',
-          boxShadow: '0 12px 48px rgba(99, 102, 241, 0.25), 0 0 0 1px rgba(255,255,255,0.05) inset',
+          boxShadow: 'var(--shadow-glow-indigo), var(--shadow-lg)',
           display: 'flex',
           alignItems: 'center',
           gap: 'var(--space-xl)',
@@ -210,7 +211,7 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
           animation: 'slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
         }}>
           <div>
-            <span style={{ fontWeight: 600, fontSize: '15px', color: '#ffffff' }}>{selectedIds.size} brands selected</span>
+            <span style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{selectedIds.size} brands selected</span>
             {isScraping && (
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                 Scraping {scrapeProgress.current} of {scrapeProgress.total}...

@@ -770,7 +770,7 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
                       else if (lowerName.includes('plaid')) displayCat = 'Plaid';
                       
                       return (
-                        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(255, 255, 255, 0.9)', padding: '4px 8px', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', zIndex: 2 }}>
+                        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'var(--bg-elevated)', padding: '4px 8px', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', zIndex: 2, border: '1px solid var(--border-subtle)' }}>
                           {displayCat}
                         </div>
                       );
@@ -1030,7 +1030,7 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
 
                   {/* Buyer Intelligence Expansion */}
                   {(contact.areasOfResponsibility || contact.outreachStrategy) && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', background: 'rgba(99, 102, 241, 0.04)', borderRadius: '6px', borderLeft: '3px solid var(--accent-indigo)', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', background: 'var(--bg-hover)', borderRadius: '6px', borderLeft: '3px solid var(--accent-indigo)', marginTop: '4px' }}>
                       {contact.areasOfResponsibility && (
                         <div>
                           <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Areas of Responsibility</span>

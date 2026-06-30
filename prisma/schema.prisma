@@ -31,6 +31,8 @@ model Brand {
   priceRange       String?  // e.g. "$50-$200"
   complianceNotes  String?
   description      String?
+  emailDomain      String?
+  emailPattern     String?
   lastScrapedAt    DateTime?
   dataFreshness    Int      @default(0) // 0-100
   matchScore       Int?     // 0-100, set by AI gap detection
@@ -60,9 +62,11 @@ model Product {
   id         String  @id @default(cuid())
   brandId    String
   name       String
-  category   String? // tops | bottoms | dresses | outerwear | accessories | footwear
-  priceMin   Float?
-  priceMax   Float?
+  category   String? // casual | denim/indigo | prints | other
+  priceMin   Float?  // Converted to USD
+  priceMax   Float?  // Converted to USD
+  localPrice Float?  // Original extracted price
+  currency   String? @default("USD")
   fit        String? // slim | regular | oversized | relaxed
   material   String?
   season     String? // SS25 | AW25 | year-round
@@ -513,6 +517,7 @@ model SupplierProfile {
   name                String
   type                String   // Manufacturer, Fabric Mill, Buying Office, Logistics Provider
   location            String?
+  website             String?
   companyOverview     String?
   
   // Capabilities & Scale

@@ -158,22 +158,32 @@ async function extractPageData(page: Page, url: string, isSubpage: boolean = fal
       const textContent = textContainer.textContent || '';
       
       // Try to find a price
-      const priceMatch = textContent.match(/[$€£₹]\s?\d+(?:[,.]\d{2})?/);
-      let priceMin = null;
+      const priceMatch = textContent.match(/([$€£₹])\s?(\d+(?:[,.]\d{2})?)/);
+      let localPrice = null;
+      let currency = 'USD';
+      
       if (priceMatch) {
-        priceMin = parseFloat(priceMatch[0].replace(/[^0-9.]/g, ''));
+        const symbol = priceMatch[1];
+        if (symbol === '€') currency = 'EUR';
+        else if (symbol === '£') currency = 'GBP';
+        else if (symbol === '₹') currency = 'INR';
+        else currency = 'USD'; // Default to USD for $
+        
+        localPrice = parseFloat(priceMatch[2].replace(/[^0-9.]/g, ''));
       }
       
       // Try to find a name (longest text node that isn't a price)
       let name = img?.getAttribute('alt') || 'Product';
       if (name.length < 5 || name.toLowerCase().includes('product')) {
-         const texts = textContent.split('\n').map(t => t.trim()).filter(t => t.length > 5 && !t.includes('$'));
+         const texts = textContent.split('\n').map(t => t.trim()).filter(t => t.length > 5 && !/[$€£₹]/.test(t));
          if (texts.length > 0) name = texts[0];
       }
       
       prods.push({
         name: name.slice(0, 100),
-        priceMin,
+        localPrice,
+        currency,
+        priceMin: localPrice, // Fallback for compatibility, will be overwritten by FX
         imageUrl,
         sourceUrl,
         category: ''

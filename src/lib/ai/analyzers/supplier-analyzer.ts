@@ -2,6 +2,7 @@ import prisma from '@/lib/db';
 import { generateStructuredResponse } from '../router';
 import { generateWinStrategy } from './win-strategy-generator';
 import { getAquarelleContextString } from '@/lib/knowledge/aquarelle-kb';
+import { scrapeStatic } from '@/lib/scraper/static-scraper';
 
 export async function analyzeSupplier(supplierId: string, brandId: string) {
   try {
@@ -10,10 +11,25 @@ export async function analyzeSupplier(supplierId: string, brandId: string) {
     if (!supplier || !brand) throw new Error('Supplier or Brand not found');
 
     console.log(`[SupplierAnalyzer] Analyzing ${supplier.name} for brand ${brand.name}...`);
+    
+    let websiteContext = '';
+    if (supplier.website) {
+      console.log(`[SupplierAnalyzer] Scraping supplier website: ${supplier.website}...`);
+      try {
+        const scrapeResult = await scrapeStatic(supplier.website);
+        websiteContext = `\n\n--- SCRAPED WEBSITE CONTENT ---\n${scrapeResult.markdown.slice(0, 15000)}`;
+      } catch (e) {
+        console.error(`[SupplierAnalyzer] Failed to scrape ${supplier.website}:`, e);
+      }
+    }
 
     const systemPrompt = `You are a Global Sourcing Director and Supply Chain Intelligence Expert. 
-Analyze the supplier's expected capabilities, strengths, and weaknesses based on industry knowledge of typical suppliers in their region and category.
-If they are a known entity, use your knowledge to provide specific details.
+Analyze the supplier's expected capabilities, strengths, and weaknesses.
+
+CRITICAL INSTRUCTION: Rely ONLY on the provided scraped website context and your verified internal knowledge base. 
+Do NOT guess. Do NOT invent data based on regional stereotypes. 
+If a specific metric (like MOQ, certifications, or lead times) is not explicitly known or stated on their website, you MUST output null or an empty array [].
+If they are a globally known entity, you may use your verified knowledge to provide specific factual details, but you must still abstain from guessing.
 
 Return ONLY a JSON object matching this interface:
 {
@@ -48,12 +64,12 @@ Return ONLY a JSON object matching this interface:
 
     const { result } = await generateStructuredResponse<any>(
       systemPrompt,
-      `Supplier: ${supplier.name}\nBrand: ${brand.name}\nType: ${supplier.type}\nLocation: ${supplier.location}`,
+      `Supplier: ${supplier.name}\nBrand: ${brand.name}\nType: ${supplier.type}\nLocation: ${supplier.location}\nWebsite: ${supplier.website || 'Unknown'}${websiteContext}`,
       (text: string) => {
         const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
         return JSON.parse(cleaned);
       },
-      'ollama' // prefer local model for volume or gemini for quality
+      'gemini' // Require gemini for factual world knowledge and deep contextual understanding
     );
 
     await prisma.supplierProfile.update({

@@ -1,7 +1,7 @@
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
-import prisma from './src/lib/db.ts';
+import prisma from '../src/lib/db';
 
 async function testLevis() {
   const brands = await prisma.brand.findMany({

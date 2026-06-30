@@ -4,6 +4,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Aquarelle Intelligence — Market Intelligence Platform",
   description: "AI-powered market intelligence for apparel brands. Discover, analyze, and qualify brand partnerships with structured intelligence.",
+  icons: {
+    icon: '/logo.jpeg',
+    shortcut: '/logo.jpeg',
+    apple: '/logo.jpeg',
+  },
 };
 
 export default function RootLayout({

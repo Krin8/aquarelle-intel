@@ -68,11 +68,11 @@ CRITICAL RULES FOR SHARPNESS:
 3. If a company is not directly and explicitly related to textile or garment production (e.g. Garment Manufacturers, Fabric Mills, Trims Suppliers, Apparel OEMs), IGNORE IT completely.
 
 Extract up to ${settings.maxSuppliersPerScan} DIRECT apparel suppliers. Return ONLY JSON.
-Format: { "suppliers": [{ "name": "Company X", "type": "Garment Manufacturer", "location": "Vietnam" }] }`;
+Format: { "suppliers": [{ "name": "Company X", "type": "Garment Manufacturer", "location": "Vietnam", "website": "https://example.com" }] }`;
 
-    let discoveredSuppliers: { name: string; type: string; location: string }[] = [];
+    let discoveredSuppliers: { name: string; type: string; location: string; website?: string }[] = [];
     try {
-      const { result } = await generateStructuredResponse<{ suppliers: { name: string, type: string, location: string }[] }>(
+      const { result } = await generateStructuredResponse<{ suppliers: { name: string, type: string, location: string, website?: string }[] }>(
         listPrompt,
         searchContext,
         (text: string) => {
@@ -99,6 +99,7 @@ Format: { "suppliers": [{ "name": "Company X", "type": "Garment Manufacturer", "
             name: s.name,
             type: s.type,
             location: s.location,
+            website: s.website || null,
             companyOverview: 'Pending detailed analysis'
           }
         });
