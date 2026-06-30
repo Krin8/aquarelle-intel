@@ -9,6 +9,7 @@ const publicPaths = ['/login', '/request-access', '/api/auth'];
 const adminPaths = ['/admin'];
 
 export async function proxy(request: NextRequest) {
+  return NextResponse.next();
   const { pathname } = request.nextUrl;
 
   // Ignore static files, images, and next.js internals

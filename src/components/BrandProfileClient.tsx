@@ -112,6 +112,41 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
 
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   
+  // Contact multi-select state
+  const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
+
+  const handleToggleContact = (id: string) => {
+    setSelectedContactIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleAllContacts = () => {
+    if (selectedContactIds.size === brand.contacts.length) {
+      setSelectedContactIds(new Set());
+    } else {
+      setSelectedContactIds(new Set(brand.contacts.map(c => c.id)));
+    }
+  };
+
+  const handleBulkDeleteContacts = async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedContactIds.size} selected contacts?`)) return;
+    try {
+      const { deleteContact } = await import('@/actions/brand-actions');
+      for (const id of Array.from(selectedContactIds)) {
+        await deleteContact(id);
+      }
+      setSelectedContactIds(new Set());
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete some contacts');
+    }
+  };
+
   // Scrape target state
   const [scrapeTarget, setScrapeTarget] = useState<'all' | 'contacts' | 'overview' | 'images'>('all');
 
@@ -933,6 +968,22 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', background: 'var(--bg-tertiary)', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={brand.contacts.length > 0 && selectedContactIds.size === brand.contacts.length}
+                    onChange={handleToggleAllContacts}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <span style={{ fontWeight: 600 }}>{selectedContactIds.size} selected</span>
+                </div>
+                {selectedContactIds.size > 0 && (
+                  <button onClick={handleBulkDeleteContacts} className="btn btn-secondary btn-sm" style={{ color: 'var(--accent-rose)', border: '1px solid var(--accent-rose)' }}>
+                    🗑️ Delete Selected
+                  </button>
+                )}
+              </div>
               {brand.contacts.map((contact, i) => (
                 <div 
                   key={contact.id} 
@@ -941,13 +992,21 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
                     display: 'flex',
                     flexDirection: 'column',
                     padding: '12px 16px',
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-color)',
+                    background: selectedContactIds.has(contact.id) ? 'var(--bg-hover)' : 'var(--bg-card)',
+                    border: selectedContactIds.has(contact.id) ? '1px solid var(--accent-indigo)' : '1px solid var(--border-color)',
                     borderRadius: '8px',
                     gap: '12px'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ paddingRight: '8px' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedContactIds.has(contact.id)}
+                        onChange={() => handleToggleContact(contact.id)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </div>
                     <div style={{ flex: '1.5', minWidth: '150px' }}>
                       <div style={{ fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {contact.name}

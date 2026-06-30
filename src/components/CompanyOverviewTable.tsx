@@ -23,48 +23,48 @@ export function CompanyOverviewTable({ brand }: CompanyOverviewProps) {
     <div className="card" style={{ overflowX: 'auto' }}>
       <h3 style={{ marginTop: 0, marginBottom: 'var(--space-md)' }}>Company Overview</h3>
       <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '800px' }}>
-        <thead style={{ backgroundColor: '#e2e8f0', color: '#1e293b', borderBottom: '2px solid #cbd5e1' }}>
+        <thead style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderBottom: '2px solid var(--border-strong)' }}>
           <tr>
-            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid #cbd5e1' }}>Company Name</th>
-            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid #cbd5e1' }}>Parent Company</th>
-            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid #cbd5e1' }}>Country of Origin</th>
-            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid #cbd5e1' }}>City</th>
-            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid #cbd5e1' }}>State</th>
-            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid #cbd5e1' }}>Turnover (USD)</th>
-            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid #cbd5e1' }}>No. of Stores</th>
-            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid #cbd5e1' }}>Retail Price (Men's Shirt)</th>
-            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid #cbd5e1' }}>Product Type</th>
+            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid var(--border-default)' }}>Company Name</th>
+            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid var(--border-default)' }}>Parent Company</th>
+            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid var(--border-default)' }}>Country of Origin</th>
+            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid var(--border-default)' }}>City</th>
+            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid var(--border-default)' }}>State</th>
+            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid var(--border-default)' }}>Turnover (USD)</th>
+            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid var(--border-default)' }}>No. of Stores</th>
+            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid var(--border-default)' }}>Retail Price (Men's Shirt)</th>
+            <th style={{ padding: '12px 16px', fontWeight: 600, borderRight: '1px solid var(--border-default)' }}>Product Type</th>
             <th style={{ padding: '12px 16px', fontWeight: 600 }}>Website</th>
           </tr>
         </thead>
         <tbody>
-          <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '12px 16px', borderRight: '1px solid #e2e8f0', color: '#0f172a', fontWeight: 500 }}>{brand.name}</td>
-            <td style={{ padding: '12px 16px', borderRight: '1px solid #e2e8f0', color: brand.parentCompany ? '#0f172a' : '#94a3b8' }}>
+          <tr className="table-row">
+            <td style={{ padding: '12px 16px', borderRight: '1px solid var(--border-default)', color: 'var(--text-primary)', fontWeight: 500 }}>{brand.name}</td>
+            <td style={{ padding: '12px 16px', borderRight: '1px solid var(--border-default)', color: brand.parentCompany ? 'var(--text-primary)' : 'var(--text-muted)' }}>
               {brand.parentCompany || '-'}
             </td>
-            <td style={{ padding: '12px 16px', borderRight: '1px solid #e2e8f0', color: brand.countryOfOrigin ? '#0f172a' : '#94a3b8' }}>
+            <td style={{ padding: '12px 16px', borderRight: '1px solid var(--border-default)', color: brand.countryOfOrigin ? 'var(--text-primary)' : 'var(--text-muted)' }}>
               {brand.countryOfOrigin || '-'}
             </td>
-            <td style={{ padding: '12px 16px', borderRight: '1px solid #e2e8f0', color: brand.city ? '#0f172a' : '#94a3b8' }}>
+            <td style={{ padding: '12px 16px', borderRight: '1px solid var(--border-default)', color: brand.city ? 'var(--text-primary)' : 'var(--text-muted)' }}>
               {brand.city || '-'}
             </td>
-            <td style={{ padding: '12px 16px', borderRight: '1px solid #e2e8f0', color: brand.state ? '#0f172a' : '#94a3b8' }}>
+            <td style={{ padding: '12px 16px', borderRight: '1px solid var(--border-default)', color: brand.state ? 'var(--text-primary)' : 'var(--text-muted)' }}>
               {brand.state || '-'}
             </td>
-            <td style={{ padding: '12px 16px', borderRight: '1px solid #e2e8f0', fontWeight: 500, color: brand.turnover ? '#0f172a' : '#94a3b8' }}>
+            <td style={{ padding: '12px 16px', borderRight: '1px solid var(--border-default)', fontWeight: 500, color: brand.turnover ? 'var(--text-primary)' : 'var(--text-muted)' }}>
               {brand.turnover || '-'}
             </td>
-            <td style={{ padding: '12px 16px', borderRight: '1px solid #e2e8f0', color: brand.storesCount ? '#0f172a' : '#94a3b8' }}>
+            <td style={{ padding: '12px 16px', borderRight: '1px solid var(--border-default)', color: brand.storesCount ? 'var(--text-primary)' : 'var(--text-muted)' }}>
               {brand.storesCount?.toString() || '-'}
             </td>
-            <td style={{ padding: '12px 16px', borderRight: '1px solid #e2e8f0', color: brand.retailPriceMensShirt ? '#0f172a' : '#94a3b8' }}>
+            <td style={{ padding: '12px 16px', borderRight: '1px solid var(--border-default)', color: brand.retailPriceMensShirt ? 'var(--text-primary)' : 'var(--text-muted)' }}>
               {brand.retailPriceMensShirt || '-'}
             </td>
-            <td style={{ padding: '12px 16px', borderRight: '1px solid #e2e8f0', color: brand.productType ? '#0f172a' : '#94a3b8' }}>
+            <td style={{ padding: '12px 16px', borderRight: '1px solid var(--border-default)', color: brand.productType ? 'var(--text-primary)' : 'var(--text-muted)' }}>
               {brand.productType || '-'}
             </td>
-            <td style={{ padding: '12px 16px', color: brand.website ? '#2563eb' : '#94a3b8' }}>
+            <td style={{ padding: '12px 16px', color: brand.website ? 'var(--accent-indigo)' : 'var(--text-muted)' }}>
               {brand.website ? (
                 <a href={brand.website.startsWith('http') ? brand.website : `https://${brand.website}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
                   {brand.website.replace(/^https?:\/\/(www\.)?/, '')}

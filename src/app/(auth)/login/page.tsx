@@ -2,7 +2,10 @@ import { login } from '@/actions/auth-actions';
 import Link from 'next/link';
 import '../auth.css';
 
+import { redirect } from 'next/navigation';
+
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ callbackUrl?: string, error?: string }> }) {
+  redirect('/');
   const { callbackUrl, error } = await searchParams;
 
   return (

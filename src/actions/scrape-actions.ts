@@ -139,16 +139,16 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
     let aiContacts: any[] = [];
     try {
       if (content.markdown && content.markdown.trim().length > 100) {
-        console.log(`[Scrape] Analyzing website content with AI for ${brand.name}...`);
-        const aiResult = await extractContacts(content.markdown, brand.name);
-        if (aiResult && aiResult.contacts) {
-          aiContacts = aiResult.contacts.map(c => ({ ...c, _source: 'website' }));
-          console.log(`[Scrape] AI extracted ${aiContacts.length} contacts from website`);
+        console.log(`[Scrape] Analyzing website content with Regex for ${brand.name}...`);
+        const regexResult = await extractContacts(content.markdown, brand.name);
+        if (regexResult && regexResult.contacts) {
+          aiContacts = regexResult.contacts.map(c => ({ ...c, _source: 'website' }));
+          console.log(`[Scrape] Regex extracted ${aiContacts.length} contacts from website`);
         }
       }
 
       if (aiContacts.length === 0) {
-        console.log(`[Scrape] No contacts found on website, falling back to Gemini's internal knowledge base...`);
+        console.log(`[Scrape] No contacts found via Regex on website, falling back to Gemini's internal knowledge base...`);
         const kbResult = await findContactsFromKnowledge(brand.name);
         if (kbResult && kbResult.contacts) {
           aiContacts = kbResult.contacts.map(c => ({ ...c, _source: 'google_ai_sge' }));
@@ -603,21 +603,30 @@ export async function generateMoreContacts(brandId: string) {
       }
     }
     
-    let hunterDomain = '';
-    let hunterPattern = '';
-    const samplePersons = [];
-    for (const c of newAiContacts) {
-      if (c.name && samplePersons.length < 3) {
-        const parts = c.name.trim().split(/\s+/);
-        if (parts.length >= 2) samplePersons.push({ name: c.name, firstName: parts[0], lastName: parts.slice(1).join(' ') });
+    let hunterDomain = brand.emailDomain || '';
+    let hunterPattern = brand.emailPattern || '';
+    
+    // Only attempt to derive the pattern if we don't already have it cached on the brand
+    if (!hunterDomain || !hunterPattern) {
+      const samplePersons = [];
+      for (const c of newAiContacts) {
+        if (c.name && samplePersons.length < 3) {
+          const parts = c.name.trim().split(/\s+/);
+          if (parts.length >= 2) samplePersons.push({ name: c.name, firstName: parts[0], lastName: parts.slice(1).join(' ') });
+        }
       }
-    }
-    for (const domain of candidateDomains) {
-      const { pattern, domain: verifiedDomain } = await findRobustDomainPattern(domain, samplePersons);
-      if (pattern !== 'unknown' && pattern !== '{first}') {
-        hunterDomain = verifiedDomain || domain;
-        hunterPattern = pattern;
-        break;
+      for (const domain of candidateDomains) {
+        const { pattern, domain: verifiedDomain } = await findRobustDomainPattern(domain, samplePersons);
+        if (pattern !== 'unknown' && pattern !== '{first}') {
+          hunterDomain = verifiedDomain || domain;
+          hunterPattern = pattern;
+          // Save it back to the brand so it is not repeatedly derived
+          await prisma.brand.update({
+            where: { id: brandId },
+            data: { emailDomain: hunterDomain, emailPattern: hunterPattern }
+          });
+          break;
+        }
       }
     }
     
