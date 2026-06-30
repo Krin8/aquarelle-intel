@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ContactDetailsModal } from './ContactDetailsModal';
 import { ApiKeyModal } from './ApiKeyModal';
 import ReactMarkdown from 'react-markdown';
-import { updateBrandStatus, deleteBrand, importApolloCsv, updateBrandFinancials } from '@/actions/brand-actions';
+import { updateBrandStatus, deleteBrand, importApolloCsv, updateBrandFinancials, clearBrandProductsAction } from '@/actions/brand-actions';
 import { scrapeBrand, getBrandStatus, generateMoreContacts } from '@/actions/scrape-actions';
 import { runWebsiteAnalysis, runGapDetection, runPitchGeneration, runPipelineScoring, submitFeedback, askBrandQuestion, generateDraft, generateFinancialIntelligenceAction } from '@/actions/ai-actions';
 import { addNote, deleteNote, togglePinNote } from '@/actions/note-actions';
@@ -63,6 +63,9 @@ const QUICK_QUESTIONS = [
 export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWithRelations, pitchTemplates?: any[] }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('Overview');
+  const [pipelineState, setPipelineState] = useState(brand.pipelineData);
+  const [isScoring, setIsScoring] = useState(false);
+  const [visibleProductsCount, setVisibleProductsCount] = useState(10);
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
 
@@ -102,6 +105,8 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
 
   // Copy-to-clipboard state
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const [isClearingImages, setIsClearingImages] = useState(false);
 
   const [useDataProvider, setUseDataProvider] = useState(false);
   const [useLinkedin, setUseLinkedin] = useState(false);
@@ -769,7 +774,27 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 600 }}>
               Products (Scraped from {brand.website.replace(/^https?:\/\//, '')})
             </h3>
-            {brand.products.length > 0 && <span className="status-badge discovered">Live Data</span>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+              {brand.products.length > 0 && (
+                <button
+                  onClick={async () => {
+                    if (confirm('Are you sure you want to delete all scraped images/products for this brand?')) {
+                      setIsClearingImages(true);
+                      await clearBrandProductsAction(brand.id);
+                      setIsClearingImages(false);
+                      // Force local state update or rely on Next.js revalidatePath
+                      router.refresh();
+                    }
+                  }}
+                  disabled={isClearingImages}
+                  className="btn btn-outline"
+                  style={{ color: 'var(--status-error)', borderColor: 'var(--status-error)' }}
+                >
+                  {isClearingImages ? 'Clearing...' : 'Clear All'}
+                </button>
+              )}
+              {brand.products.length > 0 && <span className="status-badge discovered">Live Data</span>}
+            </div>
           </div>
           
           {brand.products.length === 0 ? (
@@ -780,7 +805,7 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--space-lg)' }}>
-              {brand.products.map(product => (
+              {brand.products.slice(0, visibleProductsCount).map(product => (
                 <div key={product.id} style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)' }}>
                   <div style={{ height: '240px', width: '100%', position: 'relative', background: '#f5f5f5' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -819,6 +844,18 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {visibleProductsCount < brand.products.length && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-xl)' }}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setVisibleProductsCount(v => v + 10)}
+                style={{ padding: '8px 24px', borderRadius: '24px', fontWeight: 600 }}
+              >
+                ✨ Generate More
+              </button>
             </div>
           )}
         </div>

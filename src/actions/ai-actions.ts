@@ -417,7 +417,8 @@ export async function generateDraft(brandId: string, contactId: string, stage: 1
       contact.role,
       contact.department,
       JSON.parse(latestGapDetection.structuredData),
-      stage
+      stage,
+      brand.customerType
     );
 
     return { success: true, draft: result };

@@ -308,3 +308,16 @@ export async function deleteContact(contactId: string) {
     return { error: 'Failed to delete contact' };
   }
 }
+
+export async function clearBrandProductsAction(brandId: string) {
+  try {
+    await prisma.product.deleteMany({
+      where: { brandId }
+    });
+    revalidatePath(`/brands/${brandId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to clear products:', error);
+    return { error: 'Failed to clear products' };
+  }
+}

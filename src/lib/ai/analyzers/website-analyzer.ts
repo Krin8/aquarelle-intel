@@ -9,7 +9,8 @@ const SYSTEM_PROMPT = `You are a market intelligence extraction engine for Aquar
 RULES:
 1. Extract information primarily from the provided website content.
 2. You MAY use your training knowledge to fill in gaps about the brand (e.g. segment, target customer, key differentiators, sustainability, HQ) if the website content is sparse, but ensure it is highly accurate for the real-world brand.
-3. Output a single raw JSON object. No markdown fences, no preamble, no commentary.`;
+3. ANTI-HALLUCINATION: Never fabricate, guess, or hallucinate facts. If you do not have high confidence in an answer from the text or your training data, output null. Do NOT assume generic industry details.
+4. Output a single raw JSON object. No markdown fences, no preamble, no commentary.`;
 
 
 // ─── USER PROMPT BUILDER ─────────────────────────────────────────────────────

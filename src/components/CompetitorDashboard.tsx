@@ -6,6 +6,8 @@ import {
   ResponsiveContainer, Tooltip, Legend 
 } from 'recharts';
 import { getCompetitorsForBrand, discoverCompetitorsAction, deleteCompetitor, runCompetitorGapAnalysis, scrapeCompetitorBrandAction } from '@/actions/competitor-actions';
+import { safeJsonParse } from '@/lib/utils/formatters';
+import { CompanyOverviewTable } from './CompanyOverviewTable';
 
 export function CompetitorDashboard({ brandId }: { brandId: string }) {
   const [competitors, setCompetitors] = useState<any[]>([]);
@@ -14,6 +16,7 @@ export function CompetitorDashboard({ brandId }: { brandId: string }) {
   const [selectedComp, setSelectedComp] = useState<any | null>(null);
   const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
   const [scrapingId, setScrapingId] = useState<string | null>(null);
+  const [showAnalysis, setShowAnalysis] = useState(false);
 
   const fetchCompetitors = useCallback(async () => {
     const data = await getCompetitorsForBrand(brandId);
@@ -128,7 +131,10 @@ export function CompetitorDashboard({ brandId }: { brandId: string }) {
                   padding: 'var(--space-sm)',
                   position: 'relative'
                 }}
-                onClick={() => setSelectedComp(comp)}
+                onClick={() => {
+                  setSelectedComp(comp);
+                  setShowAnalysis(false);
+                }}
               >
                 <div style={{ fontWeight: 600, fontSize: '14px' }}>{comp.name}</div>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{comp.industry || 'Unknown Industry'}</div>
@@ -168,9 +174,24 @@ export function CompetitorDashboard({ brandId }: { brandId: string }) {
                     <strong>Why they are a competitor:</strong> {selectedComp.reasoning}
                   </div>
                 )}
+
+                <div style={{ marginTop: 'var(--space-md)' }}>
+                  <CompanyOverviewTable brand={selectedComp} />
+                </div>
               </div>
 
-              <div style={{ padding: 'var(--space-lg)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-xl)' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-md)' }}>
+                <button 
+                  className="btn btn-outline btn-sm" 
+                  onClick={() => setShowAnalysis(!showAnalysis)}
+                  style={{ fontSize: '12px', padding: '4px 16px', borderRadius: '16px' }}
+                >
+                  {showAnalysis ? 'Hide Analysis ▾' : 'View Full Analysis ▸'}
+                </button>
+              </div>
+
+              {showAnalysis && (
+                <div style={{ padding: 'var(--space-lg)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-xl)', borderTop: '1px solid var(--border-subtle)', marginTop: 'var(--space-md)' }}>
                 {/* Radar Chart */}
                 <div>
                   <h4 style={{ fontSize: '14px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}>AI Competitor Scoring</h4>
@@ -231,19 +252,6 @@ export function CompetitorDashboard({ brandId }: { brandId: string }) {
                       <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                         {safeJsonParse(selectedComp.swotThreats).map((item: string, i: number) => <li key={i}>{item}</li>)}
                       </ul>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 'var(--space-xl)' }}>
-                    <h4 style={{ fontSize: '14px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 'var(--space-sm)' }}>Market Positioning</h4>
-                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>
-                      <strong>Target Audience:</strong> {selectedComp.targetCustomers}
-                    </div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>
-                      <strong>Business Model:</strong> {selectedComp.businessModel}
-                    </div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)', whiteSpace: 'pre-wrap' }}>
-                      <strong>Positioning:</strong> {selectedComp.marketPosition}
                     </div>
                   </div>
 
@@ -319,6 +327,7 @@ export function CompetitorDashboard({ brandId }: { brandId: string }) {
                   </div>
                 </div>
               </div>
+              )}
             </div>
           )}
         </div>

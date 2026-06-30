@@ -34,8 +34,11 @@ HARD RULES:
 3. Never use these overused cold-email phrases or close equivalents: "I hope this email finds you well", "I wanted to reach out", "I came across", "synergies", "circle back", "touch base", "in today's fast-paced world", "game-changer", "leverage our expertise", "take it to the next level", "I'll keep this brief" (then don't).
 4. If the contact's role or department is "Unknown", do NOT mention their title or department in the email at all — personalize using only the brand name and gap analysis instead.
 5. Body length: 90-130 words. Subject line: under 8 words, no exclamation marks, no all-caps.
-6. One clear call-to-action at the end. Stage 1 = offer to share a deck/factory video. Stage 2 = ask for a short specific meeting/call.
+6. One clear call-to-action at the end.
 7. Sign off as: [Your Name], Aquarelle Intel — do not invent a sender name.
+
+RELATIONSHIP CONTEXT:
+{{RELATIONSHIP_CONTEXT}}
 
 Respond with ONLY this exact JSON shape, no markdown fences, no preamble:
 {"subjectLine": "...", "body": "..."}`;
@@ -46,8 +49,16 @@ export async function generateColdEmail(
   contactRole: string | null,
   contactDepartment: string | null,
   gapAnalysisData: any,
-  stage: 1 | 2 = 1
+  stage: 1 | 2 = 1,
+  customerType: string | null = 'new'
 ) {
+  let relationshipContext = 'This is a completely cold outreach to a NEW PROSPECT. Your goal is to break the ice, establish credibility, and generate initial interest without being pushy.';
+  if (customerType === 'existing') {
+    relationshipContext = 'This is an EXISTING CUSTOMER. Your goal is account expansion (cross-selling new categories or expanding production volume). Acknowledge the existing relationship warmly — do not speak to them as if they are a stranger.';
+  } else if (customerType === 'pipeline') {
+    relationshipContext = 'This is a PIPELINE PROSPECT (we are already in active discussions or they have shown previous interest). Your goal is to reignite or advance the conversation by pitching a specific idea based on the gap analysis.';
+  }
+
   const stageInstruction = stage === 1
     ? `STAGE 1 — INTRODUCTION:
 Goal: introduce Aquarelle and build trust, optionally grounding the intro in one concrete fact from the VERIFIED FACTS block (e.g. the Mauritius/Madagascar/India production network, or shirts specialization) rather than vague claims. Do NOT pitch specific solutions yet.
@@ -74,6 +85,8 @@ Body: Hi [Name], following up on Aquarelle — looking at [Brand]'s current [spe
     ? `Role: ${contactRole || 'Unknown'}\nDepartment: ${contactDepartment || 'Unknown'}\n(You MAY reference their role/department if it helps personalize the hook.)`
     : `Role: Unknown\nDepartment: Unknown\n(Do NOT reference a title or department anywhere in the email — personalize using the brand and gap analysis only.)`;
 
+  const parsedSystemPrompt = SYSTEM_PROMPT.replace('{{RELATIONSHIP_CONTEXT}}', relationshipContext);
+
   const userPrompt = `${stageInstruction}
 
 Prospect brand: ${brandName}
@@ -86,7 +99,7 @@ ${gapAnalysisText}
 Write the email now. Respond with the JSON only.`;
 
   const { result, rawResponse, model } = await generateStructuredResponse<EmailDraft>(
-    SYSTEM_PROMPT,
+    parsedSystemPrompt,
     userPrompt,
     (text) => {
       const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();

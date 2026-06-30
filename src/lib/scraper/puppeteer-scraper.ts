@@ -3,6 +3,7 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import type { Page } from 'puppeteer';
 import * as cheerio from 'cheerio';
 import type { ScrapedContent } from './static-scraper';
+import { findShirtCategoryLinks } from './category-finder';
 
 // We share the same Turndown configuration and logic, so we extract it or just duplicate the conversion for now
 import TurndownService from 'turndown';
@@ -14,6 +15,57 @@ const turndown = new TurndownService({
   codeBlockStyle: 'fenced',
 });
 turndown.remove(['script', 'style', 'nav', 'footer', 'iframe', 'noscript']);
+
+async function extractJsonLdProducts(page: Page, pageUrl: string) {
+  return page.evaluate((url) => {
+    const results: any[] = [];
+
+    function pushProduct(node: any) {
+      if (!node || node['@type'] !== 'Product') return;
+      const offers = Array.isArray(node.offers) ? node.offers[0] : node.offers;
+      const image = Array.isArray(node.image) ? node.image[0] : node.image;
+      if (!image) return;
+
+      const price = offers?.price ? parseFloat(offers.price) : null;
+      const currency = offers?.priceCurrency || 'USD';
+      const productUrl = node.url || url;
+
+      results.push({
+        name: node.name || 'Product',
+        localPrice: price,
+        currency,
+        priceMin: price,
+        imageUrl: typeof image === 'string' ? image : image?.url,
+        sourceUrl: productUrl.startsWith('http') ? productUrl : new URL(productUrl, url).href,
+        category: ''
+      });
+    }
+
+    const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+    for (const script of scripts) {
+      try {
+        const data = JSON.parse(script.textContent || '');
+        const items = Array.isArray(data) ? data : [data];
+        for (const item of items) {
+          if (item['@type'] === 'Product') {
+            pushProduct(item);
+          } else if (item['@graph']) {
+            // some sites nest products inside @graph
+            for (const g of item['@graph']) pushProduct(g);
+          } else if (item.itemListElement) {
+            // ItemList of products (common on category pages)
+            for (const el of item.itemListElement) {
+              pushProduct(el.item || el);
+            }
+          }
+        }
+      } catch {
+        // malformed JSON-LD, skip this script tag
+      }
+    }
+    return results;
+  }, pageUrl);
+}
 
 async function extractPageData(page: Page, url: string, isSubpage: boolean = false) {
   // Go to URL and wait until network is mostly idle
@@ -45,19 +97,21 @@ async function extractPageData(page: Page, url: string, isSubpage: boolean = fal
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       let totalHeight = 0;
-      const distance = 100;
+      const distance = 400; // bigger jumps to actually trigger lazy-load thresholds
       const timer = setInterval(() => {
         const scrollHeight = document.body.scrollHeight;
         window.scrollBy(0, distance);
         totalHeight += distance;
 
-        if (totalHeight >= scrollHeight - window.innerHeight || totalHeight > 5000) {
+        if (totalHeight >= scrollHeight - window.innerHeight || totalHeight > 25000) {
           clearInterval(timer);
           resolve();
         }
-      }, 50); // Faster scroll for speed
+      }, 250); // slower interval gives IntersectionObservers time to fire
     });
   });
+  // give images one more beat to swap in after the final scroll
+  await new Promise(r => setTimeout(r, 1500));
 
   const html = await page.content();
   const $ = cheerio.load(html);
@@ -190,10 +244,13 @@ async function extractPageData(page: Page, url: string, isSubpage: boolean = fal
       });
       seenUrls.add(sourceUrl);
       
-      if (prods.length >= 50) break;
+      if (prods.length >= 120) break;
     }
     return prods;
   });
+
+  const jsonLdProducts = await extractJsonLdProducts(page, url);
+  const finalProducts = jsonLdProducts.length > 0 ? jsonLdProducts : products;
 
   return {
     url,
@@ -206,7 +263,7 @@ async function extractPageData(page: Page, url: string, isSubpage: boolean = fal
     phones,
     links,
     images,
-    products,
+    products: finalProducts,
     contentLength: html.length,
   };
 }
@@ -253,6 +310,66 @@ export async function scrapeWithPuppeteer(mainUrl: string, target: string = 'all
       }
     }
 
+    const hostname = new URL(mainUrl).hostname;
+    let categoryProducts: any[] = [];
+
+    if (target === 'images' || target === 'all') {
+      const shirtCategoryLinks = findShirtCategoryLinks(mainData.links, hostname);
+      console.log(`[DeepCrawl] Found ${shirtCategoryLinks.length} candidate shirt category pages from homepage`);
+
+      // Track all crawled URLs to avoid re-crawling
+      const crawledUrls = new Set<string>();
+      
+      for (const link of shirtCategoryLinks) {
+        try {
+          const normalizedHref = link.href.split('?')[0];
+          if (crawledUrls.has(normalizedHref)) continue;
+          crawledUrls.add(normalizedHref);
+          
+          console.log(`[DeepCrawl] -> category: ${link.href}`);
+          const catPage = await browser.newPage();
+          await catPage.setViewport({ width: 1280, height: 800 });
+          const data = await extractPageData(catPage, link.href, true);
+          categoryProducts.push(...(data.products || []));
+          
+          // SUB-CATEGORY DISCOVERY: Look for shirt-specific sub-nav links
+          // on this category page (e.g., /tops/ page links to /shirts-flannels/)
+          const subCatLinks = findShirtCategoryLinks(data.links, hostname);
+          for (const subLink of subCatLinks) {
+            const subNorm = subLink.href.split('?')[0];
+            if (crawledUrls.has(subNorm)) continue;
+            crawledUrls.add(subNorm);
+            
+            try {
+              console.log(`[DeepCrawl] -> sub-category: ${subLink.href}`);
+              const subPage = await browser.newPage();
+              await subPage.setViewport({ width: 1280, height: 800 });
+              const subData = await extractPageData(subPage, subLink.href, true);
+              categoryProducts.push(...(subData.products || []));
+              await subPage.close();
+            } catch (e) {
+              console.log(`[DeepCrawl] Failed to scrape sub-category page ${subLink.href}`);
+            }
+          }
+          
+          await catPage.close();
+        } catch (e) {
+          console.log(`[DeepCrawl] Failed to scrape category page ${link.href}`);
+        }
+      }
+
+      // de-dupe by sourceUrl across all category pages + homepage
+      const allRaw = [...(mainData.products || []), ...categoryProducts];
+      const seenUrls = new Set<string>();
+      categoryProducts = allRaw.filter(p => {
+        if (!p.sourceUrl || seenUrls.has(p.sourceUrl)) return false;
+        seenUrls.add(p.sourceUrl);
+        return true;
+      });
+
+      console.log(`[DeepCrawl] Collected ${categoryProducts.length} total candidate products`);
+    }
+
     // Combine all data
     const allEmails = [...new Set([...mainData.emails, ...subpagesData.flatMap(d => d.emails)])] as string[];
     const allPhones = [...new Set([...mainData.phones, ...subpagesData.flatMap(d => d.phones)])] as string[];
@@ -274,7 +391,7 @@ export async function scrapeWithPuppeteer(mainUrl: string, target: string = 'all
       phones: allPhones.slice(0, 15),
       links: mainData.links.slice(0, 100),
       images: (target === 'images' || target === 'all') ? mainData.images : [],
-      extractedProducts: (target === 'images' || target === 'all') ? (mainData.products || []) : [],
+      extractedProducts: (target === 'images' || target === 'all') ? categoryProducts : [],
       contentLength: mainData.contentLength + subpagesData.reduce((acc, d) => acc + d.contentLength, 0),
     };
   } finally {

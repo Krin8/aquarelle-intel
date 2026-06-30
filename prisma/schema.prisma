@@ -62,7 +62,8 @@ model Product {
   id         String  @id @default(cuid())
   brandId    String
   name       String
-  category   String? // casual | denim/indigo | prints | other
+  category   String? // e.g. Oxford Shirts, Flannel Shirts
+  fabricTag  String? // e.g. Oxford, Linen, Denim
   priceMin   Float?  // Converted to USD
   priceMax   Float?  // Converted to USD
   localPrice Float?  // Original extracted price
@@ -268,6 +269,17 @@ model CompetitorProfile {
   name            String
   website         String
   industry        String?
+  
+  // Corporate Overview
+  parentCompany        String?
+  countryOfOrigin      String?
+  city                 String?
+  state                String?
+  turnover             String?
+  storesCount          Int?
+  retailPriceMensShirt String?
+  productType          String?
+
   targetCustomers String?
   businessModel   String?
   marketPosition  String?

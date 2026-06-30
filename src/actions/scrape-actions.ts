@@ -5,7 +5,7 @@ import { scrapeUrl } from '@/lib/scraper';
 import { scoreConfidence, getContactConfidence } from '@/lib/normalizer/confidence-scorer';
 import { extractContacts, findContactsFromKnowledge } from '@/lib/ai/analyzers/contact-extractor';
 import { extractCompanyOverview } from '@/lib/ai/analyzers/company-overview-extractor';
-import { filterShirts } from '@/lib/scraper/shirt-filter';
+import { filterShirts, dedupeProductVariants } from '@/lib/scraper/shirt-filter';
 import { categorizeProducts } from '@/lib/ai/analyzers/product-categorizer';
 import { convertToUSD } from '@/lib/scraper/fx-converter';
 import { findDomainAndPatternWithHunter, findDomainPatternWithHunter, findRobustDomainPattern, generateEmail, deriveEmailPattern } from '@/lib/normalizer/email-pattern';
@@ -395,30 +395,55 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
         where: { brandId }
       });
       // 1. Keyword Pre-Filter (fast, cheap)
-      const validShirts = filterShirts(content.extractedProducts);
+      console.log(`[Scrape Debug] Raw product sample (first 5):`, content.extractedProducts.slice(0, 5).map((p: any) => `${p.name} | img:${!!p.imageUrl} | src:${!!p.sourceUrl}`));
+      const dedupedProducts = dedupeProductVariants(content.extractedProducts);
+      const validShirts = filterShirts(dedupedProducts);
       
-      // 2. AI Categorization (casual, denim/indigo, prints)
+      // 2. Strict Taxonomy Categorization (Regex-based)
       const categorizedShirts = await categorizeProducts(validShirts, brand.name);
       
+      // Log the funnel and discards for tuning
+      const discardedShirts = validShirts.filter(v => !categorizedShirts.some(c => c.name === v.name));
+      console.log(`[Scrape Funnel] Raw: ${content.extractedProducts.length} -> Deduped: ${dedupedProducts.length} -> Woven (Pre-Filter): ${validShirts.length} -> Categorized: ${categorizedShirts.length}`);
+      if (discardedShirts.length > 0) {
+        console.log(`[Scrape Discards] ${discardedShirts.length} items passed pre-filter but failed categorization (Regex gap or misclassification). Sample discards:`);
+        discardedShirts.slice(0, 5).forEach(d => console.log(`   - ${d.name}`));
+      }
+      
+      // Debug: log full product objects to find why they fail to save
+      console.log(`[Scrape Debug] Pre-filter sample (first 3):`, JSON.stringify(validShirts.slice(0, 3).map(p => ({ name: p.name, imageUrl: p.imageUrl?.substring(0, 60), sourceUrl: p.sourceUrl?.substring(0, 60) })), null, 2));
+      console.log(`[Scrape Debug] Categorized products (all):`, JSON.stringify(categorizedShirts.map(p => ({ name: p.name, category: p.category, imageUrl: !!p.imageUrl, sourceUrl: !!p.sourceUrl })), null, 2));
+      
       for (const prod of categorizedShirts) {
-        if (!prod.imageUrl || !prod.sourceUrl) continue; // skip broken products
+        if (!prod.imageUrl || !prod.sourceUrl) {
+          console.log(`[Scrape Warning] Skipping categorized product due to missing URL: ${prod.name}. Image: ${!!prod.imageUrl}, Source: ${!!prod.sourceUrl}`);
+          continue; // skip broken products
+        }
         
         // 3. FX Conversion to USD
         const priceUSD = await convertToUSD(prod.localPrice, prod.currency || 'USD');
         
-        await prisma.product.create({
-          data: {
-            brandId,
-            name: prod.name || 'Unknown Product',
-            localPrice: prod.localPrice || null,
-            currency: prod.currency || 'USD',
-            priceMin: priceUSD || null,
-            imageUrl: prod.imageUrl || null,
-            sourceUrl: prod.sourceUrl || null,
-            category: prod.category || 'other',
-          },
-        });
-        savedProductCount++;
+        try {
+          await prisma.product.create({
+            data: {
+              brandId,
+              name: prod.name || 'Unknown Product',
+              localPrice: prod.localPrice || null,
+              currency: prod.currency || 'USD',
+              priceMin: priceUSD || null,
+              priceMax: priceUSD || null,
+              imageUrl: prod.imageUrl,
+              sourceUrl: prod.sourceUrl,
+              category: prod.category || 'other',
+              fabricTag: prod.fabricTag || null,
+              confidence: 0.8,
+            },
+          });
+          savedProductCount++;
+          console.log(`[Scrape Saved] #${savedProductCount}: "${prod.name}" -> ${prod.category}`);
+        } catch (saveError: any) {
+          console.error(`[Scrape ERROR] Failed to save "${prod.name}":`, saveError.message);
+        }
       }
     }
     console.log(`[Scrape] Saved ${savedProductCount} products`);

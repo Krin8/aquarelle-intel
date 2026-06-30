@@ -17,6 +17,14 @@ interface DiscoveredCompetitor {
   name: string;
   website: string;
   industry: string;
+  parentCompany?: string;
+  countryOfOrigin?: string;
+  city?: string;
+  state?: string;
+  turnover?: string;
+  storesCount?: number;
+  retailPriceMensShirt?: string;
+  productType?: string;
   targetCustomers: string;
   businessModel: string;
   marketPosition: string;
@@ -146,6 +154,14 @@ Format: { "competitors": [{ "name": "Company X", "url": "https://..." }] }`;
             name: comp.name,
             website: comp.url,
             industry: analysis.industry,
+            parentCompany: analysis.parentCompany,
+            countryOfOrigin: analysis.countryOfOrigin,
+            city: analysis.city,
+            state: analysis.state,
+            turnover: analysis.turnover,
+            storesCount: analysis.storesCount,
+            retailPriceMensShirt: analysis.retailPriceMensShirt,
+            productType: analysis.productType,
             targetCustomers: analysis.targetCustomers,
             businessModel: analysis.businessModel,
             marketPosition: analysis.marketPosition + '\n\nMarketplaces: ' + marketplaceFootprint,
@@ -200,9 +216,25 @@ Your objective is to perform Dual Competitive Intelligence:
 
 ${aquarelleCtx}
 
+CRITICAL INSTRUCTIONS:
+- You MUST prioritize the most recent, up-to-date information available. Look for recent years (e.g., 2026, 2025, 2024) for revenue and store counts. Ignore outdated historical data if newer data is present.
+- Format revenue/turnover concisely (e.g., "$1.2B", "$500M"). Do not output raw large numbers.
+- If a brand is part of a larger conglomerate (e.g., Abercrombie & Fitch Co. for Hollister), specify the parent company in the parentCompany field. If independent, leave null.
+- City must ONLY contain the name of the city, absolutely no other text.
+- State should be standard postal abbreviation if US (e.g., "NY", "CA").
+- If the provided text does not contain the answer, rely on your internal knowledge base to fill in the gaps as best as possible.
+
 Return ONLY a JSON object with the following structure:
 {
   "industry": "Apparel, E-commerce, etc.",
+  "parentCompany": "Parent company name if any, else null",
+  "countryOfOrigin": "e.g. USA, UK",
+  "city": "e.g. San Francisco",
+  "state": "e.g. CA",
+  "turnover": "e.g. $1.5B (estimate if needed)",
+  "storesCount": 150,
+  "retailPriceMensShirt": "e.g. $45",
+  "productType": "e.g. Casual Apparel, Swimwear",
   "targetCustomers": "Who do they sell to?",
   "businessModel": "D2C, Wholesale, B2B?",
   "marketPosition": "Luxury, Budget, Sustainable, etc.",
