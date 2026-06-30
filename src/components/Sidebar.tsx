@@ -11,10 +11,11 @@ const navItems = [
     section: 'Intelligence',
     items: [
       { href: '/', label: 'Dashboard', icon: '◈' },
-      { href: '/brands', label: 'Brand Directory', icon: '❖' },
+      { href: '/brands', label: 'Prospect Intelligence', icon: '❖' },
       { href: '/intelligence', label: 'AI Insights', icon: '✦' },
       { href: '/analytics', label: 'Analytics', icon: '📊' },
       { href: '/regions', label: 'Regions', icon: '◉' },
+      { href: '/regions/scan', label: 'Region Scan', icon: '🔍' },
     ],
   },
   {
@@ -51,7 +52,7 @@ export function Sidebar({ initialModel = 'ollama' }: { initialModel?: 'ollama' |
     <aside className="sidebar">
       <div className="sidebar-logo">
         <div className="sidebar-logo-icon">◆</div>
-        <span className="sidebar-logo-text">CIEL Textiles</span>
+        <span className="sidebar-logo-text">Aquarelle</span>
         <span className="sidebar-logo-badge">INTEL</span>
       </div>
 

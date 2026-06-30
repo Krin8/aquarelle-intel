@@ -52,7 +52,7 @@ export function IntegrationsClient({ initialData }: { initialData: IntegrationDa
       <div className="page-header">
         <div className="page-header-content">
           <h1 className="page-title">Integrations</h1>
-          <p className="page-subtitle">Connect CIEL Textiles Intel with your existing tools</p>
+          <p className="page-subtitle">Connect Aquarelle Intel with your existing tools</p>
         </div>
       </div>
 

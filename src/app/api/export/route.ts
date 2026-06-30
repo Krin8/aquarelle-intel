@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     return new NextResponse(csvString, {
       headers: {
         'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename="ciel_textiles_export_${Date.now()}.csv"`,
+        'Content-Disposition': `attachment; filename="aquarelle_export_${Date.now()}.csv"`,
       },
     });
   } catch (error) {

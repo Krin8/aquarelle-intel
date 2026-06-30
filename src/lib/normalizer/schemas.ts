@@ -25,8 +25,8 @@ export const GapDetectionSchema = z.object({
     gap: z.string().catch('Unknown gap'),
     opportunity: z.string().catch('Unknown opportunity'),
     severity: z.string().transform(val => val.toLowerCase()).catch('medium').describe('high/medium/low'),
-  })).catch([]).describe('Product gaps CIEL Textiles can fill'),
-  priceAlignment: z.string().catch('Unknown').describe('How well prices align with CIEL Textiles capabilities'),
+  })).catch([]).describe('Product gaps Aquarelle can fill'),
+  priceAlignment: z.string().catch('Unknown').describe('How well prices align with Aquarelle capabilities'),
   regionFit: z.string().catch('Unknown').describe('How well the brand fits target regions'),
   complianceNotes: z.string().nullish().catch(null).describe('Any compliance considerations'),
   risks: z.array(z.string()).nullish().catch([]).describe('Potential risks or challenges'),
@@ -35,13 +35,20 @@ export const GapDetectionSchema = z.object({
 export type GapDetection = z.infer<typeof GapDetectionSchema>;
 
 export const PitchSuggestionSchema = z.object({
+  executiveSummary: z.string().describe('McKinsey-style executive summary of why Aquarelle is the perfect partner'),
   pitchAngles: z.array(z.object({
     title: z.string(),
     rationale: z.string(),
     openingLine: z.string(),
     keyPoints: z.array(z.string()),
     strength: z.enum(['strong', 'moderate', 'speculative']),
-  })).describe('3-5 pitch angles'),
+  })).describe('3-5 specific pitch angles based on identified gaps'),
+  productRecommendations: z.array(z.string()).describe('Specific fabrics/products from the KB to propose (e.g., Heavyweight Flannels, 65% Linen 35% Cotton)'),
+  objectionHandling: z.array(z.object({
+    objection: z.string(),
+    response: z.string()
+  })).describe('2-3 expected objections and how to counter them'),
+  expectedROI: z.string().describe('Business impact and estimated ROI for the prospect'),
   recommendedApproach: z.string().describe('Best overall approach recommendation'),
   buyerPersona: z.string().describe('Who to pitch to and why'),
   timingConsiderations: z.string().nullish().describe('Best timing for outreach'),
@@ -73,6 +80,18 @@ export type PipelineScoring = z.infer<typeof PipelineScoringSchema>;
 
 // ---- Normalized Data Schemas ----
 
+export const FinancialIntelligenceSchema = z.object({
+  fobPrice: z.number().nullish().describe('FOB Price in USD (e.g., 7.5)'),
+  stdCPU: z.number().nullish().describe('Standard CPU in INR (e.g., 190)'),
+  stdMargin: z.number().nullish().describe('Standard Margin in INR (e.g., 250)'),
+  profitPct: z.number().nullish().describe('Profit percentage as a decimal between 0 and 1 (e.g., 0.09 for 9%)'),
+  smv: z.number().nullish().describe('Standard Minute Value (SMV) in minutes'),
+  cpuGrade: z.string().nullish().describe('CPU Grade (e.g., "A", "B", "C")'),
+  prospectForAqrlMur: z.enum(['Yes', 'No']).nullish().describe('Is this a viable prospect for Aquarelle Mauritius?'),
+});
+
+export type FinancialIntelligence = z.infer<typeof FinancialIntelligenceSchema>;
+
 export const NormalizedProductSchema = z.object({
   name: z.string(),
   category: z.string().nullish(),
@@ -87,11 +106,11 @@ export const NormalizedProductSchema = z.object({
 export const NormalizedContactSchema = z.object({
   name: z.string(),
   role: z.string().nullish(),
-  department: z.enum(['Sales', 'Wholesale/B2B', 'Merchandising/Buying', 'Executive/C-Suite', 'Marketing', 'Other']).nullish(),
-  seniority: z.enum(['C-Level', 'VP', 'Director', 'Manager', 'Individual Contributor']).nullish(),
+  department: z.enum(['Sales', 'Wholesale/B2B', 'Merchandising/Buying', 'Executive/C-Suite', 'Marketing', 'Other']).nullish().catch('Other'),
+  seniority: z.enum(['C-Level', 'VP', 'Director', 'Manager', 'Individual Contributor']).nullish().catch(null),
   email: z.string().nullish(),
   phone: z.string().nullish(),
-  buyerType: z.enum(['decision_maker', 'influencer', 'gatekeeper', 'unknown']).default('unknown'),
-  confidenceScore: z.number().min(0).max(1).default(0.3),
-  source: z.enum(['website', 'linkedin', 'zoominfo', 'manual']).default('website'),
+  buyerType: z.enum(['decision_maker', 'influencer', 'gatekeeper', 'unknown']).default('unknown').catch('unknown'),
+  confidenceScore: z.number().min(0).max(1).default(0.3).catch(0.3),
+  source: z.enum(['website', 'linkedin', 'zoominfo', 'manual']).default('website').catch('website'),
 });

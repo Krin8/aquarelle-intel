@@ -6,7 +6,7 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 let geminiInstance: GoogleGenAI | null = null;
 
-function getGemini(): GoogleGenAI {
+export function getGemini(): GoogleGenAI {
   if (!geminiInstance) {
     if (!GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY is not set in environment variables');
@@ -46,7 +46,12 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, initial
       const is429 = error?.status === 429 || error?.message?.includes('429') || error?.status === 'RESOURCE_EXHAUSTED';
       
       if (!is503 && !is429) {
-        throw error;
+        if (error instanceof Error) {
+          throw error;
+        } else {
+          console.error("Gemini API Error Object:", error);
+          throw new Error(`Gemini API Error: ${typeof error === 'object' ? JSON.stringify(error) : String(error)}`);
+        }
       }
       
       if (attempt < maxRetries - 1) {
@@ -62,7 +67,8 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, initial
 export async function generateStructuredResponse<T>(
   systemPrompt: string,
   userPrompt: string,
-  parseResponse: (text: string) => T
+  parseResponse: (text: string) => T,
+  useGoogleSearch?: boolean
 ): Promise<{ result: T; rawResponse: string; model: string }> {
   const ai = getGemini();
 
@@ -73,7 +79,8 @@ export async function generateStructuredResponse<T>(
       systemInstruction: systemPrompt,
       temperature: 0.3,
       maxOutputTokens: 8192,
-      responseMimeType: 'application/json',
+      ...(useGoogleSearch ? {} : { responseMimeType: 'application/json' }),
+      ...(useGoogleSearch ? { tools: [{ googleSearch: {} }] } : {})
     },
   }));
 

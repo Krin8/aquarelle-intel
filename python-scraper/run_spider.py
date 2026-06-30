@@ -22,10 +22,15 @@ def main():
     
     target_url = sys.argv[1]
     corporate_url = sys.argv[2] if len(sys.argv) > 2 else None
+    scrape_target = sys.argv[3] if len(sys.argv) > 3 else 'all'
 
     # Now get settings (this will pick up settings.py because of SCRAPY_SETTINGS_MODULE)
     settings = get_project_settings()
     
+    if scrape_target == 'images':
+        # Increase to 55 to allow scraping enough product pages to get 50 products
+        settings.set('CLOSESPIDER_PAGECOUNT', 55, priority='cmdline')
+        
     # Disable log output to stdout so it doesn't corrupt our JSON output
     settings.set('LOG_ENABLED', False)
 
@@ -36,7 +41,7 @@ def main():
     from laguna_crawler.spiders.deep_spider import DeepSpider
 
     # We add the spider with the URL passed in as an argument
-    process.crawl(DeepSpider, target_url=target_url, corporate_url=corporate_url)
+    process.crawl(DeepSpider, target_url=target_url, corporate_url=corporate_url, scrape_target=scrape_target)
     
     # Start the crawling process (blocks until completion)
     process.start()

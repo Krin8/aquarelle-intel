@@ -13,7 +13,7 @@ puppeteer.use(StealthPlugin());
 export async function findLinkedinUrl(brandName: string, retailUrl: string, modelPref?: 'ollama' | 'gemini'): Promise<string | null> {
   let browser;
   try {
-    browser = await puppeteer.launch({ 
+    browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
@@ -48,31 +48,70 @@ export async function findLinkedinUrl(brandName: string, retailUrl: string, mode
 
     if (searchResults.length === 0) return null;
 
-    const prompt = `
-Brand: ${brandName}
-Retail URL: ${retailUrl}
+    const systemPrompt = `You are a strict URL classifier. Your only job is to pick ONE url from a list of search results, or return null. You never invent URLs — you only select from what is given.`;
+
+const prompt = `Brand: ${brandName}
+Retail URL (for reference, to help confirm this is the right company — not to reject this domain): ${retailUrl}
 
 Search Results:
 ${JSON.stringify(searchResults, null, 2)}
 
-Analyze these search results and identify the single BEST official LinkedIn Company Page URL for the brand. 
-We want the main corporate LinkedIn page (e.g. linkedin.com/company/brand-name).
-If none are valid, return null.
-Respond in JSON format: { "bestUrl": "https://..." } (or null if none found).
-`;
+TASK: From the search results above, identify the single BEST official LinkedIn COMPANY page URL for this exact brand.
 
-    const { result } = await generateStructuredResponse<{ bestUrl: string | null }>(
-      "You are an expert corporate researcher.",
+A valid match looks like: https://www.linkedin.com/company/{slug}
+(slug may have a trailing /, /about/, /posts/, etc. — that's still valid, just treat it as the company page)
+
+REJECT these LinkedIn URL types even if they mention the brand:
+- Personal profiles: linkedin.com/in/...
+- Showcase pages: linkedin.com/showcase/... (these are sub-pages for product lines or divisions, not the main company)
+- School/education pages: linkedin.com/school/...
+- Job postings: linkedin.com/jobs/...
+- Individual posts/articles: linkedin.com/posts/... , linkedin.com/pulse/...
+- Groups: linkedin.com/groups/...
+- Any non-LinkedIn URL
+
+DISAMBIGUATION RULES:
+1. Brand names can collide with unrelated companies. Only select a LinkedIn page if the result's title, snippet, or surrounding context confirms it belongs to THIS brand (matching industry, products, or the retail URL's domain context) — not just a name match.
+2. If multiple distinct /company/ pages appear for what might be the same brand (e.g. regional subsidiaries, "Brand US" vs "Brand Global"), prefer the one that appears to be the global/parent/headquarters page based on the title or snippet.
+3. Only choose a URL that appears verbatim in the search results above. Never modify, guess, or construct a slug yourself, even if you're confident what it would be.
+4. If no result is clearly a /company/ page for this specific brand, return null. Do not settle for a "close enough" personal profile, showcase page, or unrelated company.
+
+Respond with ONLY this exact JSON shape. No markdown fences, no preamble:
+{"reasoning": "<one short sentence>", "bestUrl": "<exact linkedin.com/company/... url from results, or null>"}
+
+EXAMPLES:
+
+Input results: ["linkedin.com/in/jane-doe-acme-ceo", "linkedin.com/company/acme-corp", "linkedin.com/showcase/acme-sustainability"]
+Output: {"reasoning": "acme-corp is the main company page; the others are a personal profile and a showcase sub-page.", "bestUrl": "https://linkedin.com/company/acme-corp"}
+
+Input results: ["linkedin.com/jobs/view/acme-software-engineer-123", "linkedin.com/posts/acme-corp_hiring-activity"]
+Output: {"reasoning": "Only a job posting and a post are present, no main company page.", "bestUrl": null}
+
+Now respond with the JSON only.`;
+
+    const { result } = await generateStructuredResponse<{ reasoning: string; bestUrl: string | null }>(
+      systemPrompt,
       prompt,
-      (text) => JSON.parse(text),
+      (text) => {
+        const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+        return JSON.parse(cleaned);
+      },
       modelPref
     );
 
-    if (!result.bestUrl) return null;
+    if (!result?.bestUrl) return null;
 
-    let finalUrl = result.bestUrl;
+    let finalUrl = result.bestUrl.trim();
     if (!finalUrl.startsWith('http')) {
       finalUrl = 'https://' + finalUrl;
+    }
+
+    // Removed anti-hallucination guard as per user request to use the model's inferred URL
+    // Structural guard: must actually be a /company/ page, not /in/, /showcase/, /jobs/, etc.
+    const isCompanyPage = /linkedin\.com\/company\//i.test(finalUrl);
+    if (!isCompanyPage) {
+      console.warn(`Model returned a non-company LinkedIn URL, discarding: ${finalUrl}`);
+      return null;
     }
 
     return finalUrl;

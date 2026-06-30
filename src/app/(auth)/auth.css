@@ -1,0 +1,239 @@
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80');
+  background-size: cover;
+  background-position: center;
+  font-family: Arial, sans-serif;
+}
+
+.auth-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+.auth-panel {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 450px;
+  background: linear-gradient(to right, #113f5f, #3381d6);
+  border-radius: 4px;
+  padding: 40px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+}
+
+.auth-title {
+  color: white;
+  font-size: 42px;
+  font-weight: bold;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.auth-subtitle {
+  color: white;
+  font-size: 20px;
+  font-weight: bold;
+  margin: 0 0 30px 0;
+}
+
+.auth-heading {
+  color: white;
+  font-size: 28px;
+  font-weight: normal;
+  margin: 0 0 20px 0;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-input-group {
+  position: relative;
+  width: 100%;
+}
+
+.auth-input {
+  width: 100%;
+  height: 48px;
+  border-radius: 6px;
+  border: none;
+  background-color: white;
+  padding-left: 40px;
+  padding-right: 40px;
+  font-size: 15px;
+  color: #333;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.auth-input::placeholder {
+  color: #888;
+}
+
+.auth-icon-left {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  fill: #666;
+}
+
+.auth-icon-right {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: #f0f0f0;
+  border-radius: 4px;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-icon-right svg {
+  width: 16px;
+  height: 16px;
+  fill: #333;
+}
+
+.auth-captcha-row {
+  display: flex;
+  gap: 0;
+  height: 48px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.auth-captcha-display {
+  flex: 1;
+  background-color: #e9ecef;
+  display: flex;
+  align-items: center;
+  padding-left: 40px;
+  font-size: 16px;
+  color: #333;
+  position: relative;
+}
+
+.auth-captcha-refresh {
+  width: 60px;
+  background-color: #212529;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.auth-captcha-refresh svg {
+  width: 20px;
+  height: 20px;
+  fill: white;
+}
+
+.auth-checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+.auth-checkbox-group input {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background-color: transparent;
+  outline: none;
+  position: relative;
+  cursor: pointer;
+}
+
+.auth-checkbox-group input::before {
+  content: '✓';
+  position: absolute;
+  top: -6px;
+  left: 0;
+  font-size: 20px;
+  color: #00d2d3;
+}
+
+.auth-checkbox-label {
+  color: white;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.auth-button {
+  width: 100%;
+  height: 48px;
+  border-radius: 4px;
+  border: 1px solid #1c6cbd;
+  background: linear-gradient(to bottom, #4492e6, #2d78d1);
+  color: white;
+  font-size: 18px;
+  font-weight: normal;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.auth-button:hover {
+  background: linear-gradient(to bottom, #4fa0f8, #3488eb);
+}
+
+.auth-links-center {
+  text-align: center;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.auth-links-center a {
+  color: white;
+  font-size: 14px;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.auth-links-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.auth-links-row span {
+  color: white;
+  font-size: 14px;
+}
+
+.auth-links-row a {
+  color: #5bc0de;
+  font-size: 14px;
+  text-decoration: underline;
+  font-weight: bold;
+}
+
+.auth-error {
+  background-color: rgba(220, 53, 69, 0.8);
+  color: white;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-bottom: 15px;
+}

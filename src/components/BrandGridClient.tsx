@@ -4,7 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { getFreshnessLabel } from '@/lib/normalizer/confidence-scorer';
 import { scrapeBrand } from '@/actions/scrape-actions';
+import { deleteBrands } from '@/actions/brand-actions';
 import { useRouter } from 'next/navigation';
+import { ApiKeyModal } from './ApiKeyModal';
 
 type BrandType = {
   id: string;
@@ -23,6 +25,7 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeProgress, setScrapeProgress] = useState({ current: 0, total: 0 });
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
 
   function toggleSelect(id: string) {
     const next = new Set(selectedIds);
@@ -48,9 +51,43 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
     for (let i = 0; i < idsArray.length; i++) {
       setScrapeProgress({ current: i + 1, total: idsArray.length });
       // Scrape sequentially to avoid overwhelming rate limits/browser memory
-      await scrapeBrand(idsArray[i], { useDataProvider: false, useLinkedin: false });
+      try {
+        const result = await scrapeBrand(idsArray[i], { useDataProvider: false, useLinkedin: false });
+        if (result?.error === 'API_KEYS_EXHAUSTED') {
+          setIsScraping(false);
+          setShowApiKeyModal(true);
+          return;
+        }
+      } catch (e: any) {
+        if (e.message === 'API_KEYS_EXHAUSTED') {
+          setIsScraping(false);
+          setShowApiKeyModal(true);
+          return;
+        }
+      }
     }
 
+    setIsScraping(false);
+    setSelectedIds(new Set());
+    router.refresh();
+  }
+
+  async function handleBatchDelete() {
+    if (selectedIds.size === 0) return;
+    
+    // First confirmation
+    const confirm1 = window.confirm(`Are you sure you want to delete ${selectedIds.size} brands? This action cannot be undone.`);
+    if (!confirm1) return;
+    
+    // Second confirmation
+    const confirm2 = window.confirm(`FINAL WARNING: You are about to permanently delete ${selectedIds.size} brands. Type "OK" or click OK to proceed.`);
+    if (!confirm2) return;
+
+    setIsScraping(true); // Re-using this loading state for simplicity
+    
+    const idsArray = Array.from(selectedIds);
+    await deleteBrands(idsArray);
+    
     setIsScraping(false);
     setSelectedIds(new Set());
     router.refresh();
@@ -144,6 +181,15 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
         })}
       </div>
 
+      <ApiKeyModal 
+        isOpen={showApiKeyModal} 
+        onSave={() => {
+          setShowApiKeyModal(false);
+          handleBatchScrape(); // Auto resume
+        }} 
+        onCancel={() => setShowApiKeyModal(false)} 
+      />
+
       {/* Floating Action Bar */}
       {selectedIds.size > 0 && (
         <div style={{
@@ -178,6 +224,14 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
               disabled={isScraping}
             >
               {isScraping ? <><span className="spinner"></span> Processing...</> : 'Batch Scrape 🔍'}
+            </button>
+            <button
+              className="btn btn-danger"
+              style={{ backgroundColor: '#ef4444', color: 'white', borderColor: '#dc2626' }}
+              onClick={handleBatchDelete}
+              disabled={isScraping}
+            >
+              Delete Selected 🗑️
             </button>
             <a
               href={`/api/export?type=contacts&${Array.from(selectedIds).map(id => `brandId=${id}`).join('&')}`}

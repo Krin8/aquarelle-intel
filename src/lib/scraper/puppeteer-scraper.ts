@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import type { Page } from 'puppeteer';
 import * as cheerio from 'cheerio';
 import type { ScrapedContent } from './static-scraper';
 
@@ -14,9 +15,27 @@ const turndown = new TurndownService({
 });
 turndown.remove(['script', 'style', 'nav', 'footer', 'iframe', 'noscript']);
 
-async function extractPageData(page: puppeteer.Page, url: string, isSubpage: boolean = false) {
+async function extractPageData(page: Page, url: string, isSubpage: boolean = false) {
   // Go to URL and wait until network is mostly idle
-  const response = await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+  const response = await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => null);
+  
+  // Bypass interstitials (e.g. G-Star "Choose store")
+  try {
+    const interstitialBypassed = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button, a'));
+      for (const btn of buttons) {
+        const text = btn.textContent?.toLowerCase() || '';
+        if ((text.includes('continue to') && text.includes('global')) || text.includes('accept all')) {
+          (btn as HTMLElement).click();
+          return true;
+        }
+      }
+      return false;
+    });
+    if (interstitialBypassed) {
+      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
+    }
+  } catch {}
   
   if (response && !response.ok() && response.status() !== 304 && !isSubpage) {
     throw new Error(`HTTP ${response.status()}: ${response.statusText()}`);
@@ -60,11 +79,11 @@ async function extractPageData(page: puppeteer.Page, url: string, isSubpage: boo
 
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
   const rawEmails = html.match(emailRegex) || [];
-  const emails = [...new Set(rawEmails.map(e => e.replace(/\\u[\dA-F]{4}/gi, '').replace(/[^a-zA-Z0-9._%+-@]/g, '')).filter(e => e.includes('@') && e.split('@')[0].length > 0))];
+  const emails = [...new Set(rawEmails.map((e: string) => e.replace(/\\u[\dA-F]{4}/gi, '').replace(/[^a-zA-Z0-9._%+-@]/g, '')).filter((e: string) => e.includes('@') && e.split('@')[0].length > 0))];
 
   const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}/g;
   const rawPhones = html.match(phoneRegex) || [];
-  const phones = [...new Set(rawPhones.filter(p => p.replace(/\D/g, '').length >= 7))];
+  const phones = [...new Set(rawPhones.filter((p: string) => p.replace(/\D/g, '').length >= 7))];
 
   const links: { text: string; href: string }[] = [];
   $('a[href]').each((_, el) => {
@@ -79,6 +98,93 @@ async function extractPageData(page: puppeteer.Page, url: string, isSubpage: boo
     }
   });
 
+
+  const images: { src: string; alt: string }[] = [];
+  const seenSrcs = new Set<string>();
+  $('img').each((_, el) => {
+    // Try src, data-src, data-lazy-src (common lazy-loading patterns)
+    let src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || '';
+    
+    // Try srcset as fallback (take the first URL)
+    if (!src) {
+      const srcset = $(el).attr('srcset') || '';
+      const firstEntry = srcset.split(',')[0]?.trim().split(/\s+/)[0];
+      if (firstEntry) src = firstEntry;
+    }
+    
+    if (!src || src.startsWith('data:')) return; // Skip data URIs and empty
+    
+    // Resolve relative URLs to absolute
+    try {
+      src = new URL(src, url).href;
+    } catch { return; }
+    
+    // Skip tiny tracking pixels and icons (usually < 100px in name or dimensions)
+    const alt = $(el).attr('alt') || '';
+    const width = parseInt($(el).attr('width') || '0');
+    const height = parseInt($(el).attr('height') || '0');
+    if ((width > 0 && width < 50) || (height > 0 && height < 50)) return;
+    if (src.includes('pixel') || src.includes('spacer') || src.includes('tracking')) return;
+    
+    if (!seenSrcs.has(src)) {
+      seenSrcs.add(src);
+      images.push({ src, alt: alt.slice(0, 100) });
+    }
+  });
+
+  // Generic Product Extraction (fallback for sites like G-Star)
+  const products = await page.evaluate(() => {
+    const prods: any[] = [];
+    const seenUrls = new Set<string>();
+    
+    // Find all links containing an image
+    const productLinks = Array.from(document.querySelectorAll('a')).filter(a => {
+      const img = a.querySelector('img');
+      if (!img) return false;
+      const src = img.src || img.getAttribute('data-src') || '';
+      return src.length > 0 && !src.includes('pixel') && !src.includes('tracking');
+    });
+
+    for (const link of productLinks) {
+      const sourceUrl = link.href;
+      if (!sourceUrl || sourceUrl.startsWith('javascript:') || seenUrls.has(sourceUrl)) continue;
+      
+      const img = link.querySelector('img');
+      const imageUrl = img?.src || img?.getAttribute('data-src') || img?.getAttribute('srcset')?.split(' ')[0] || '';
+      if (!imageUrl || imageUrl.startsWith('data:')) continue;
+      
+      // Look for text inside or near the link
+      const textContainer = link.parentElement?.parentElement || link;
+      const textContent = textContainer.textContent || '';
+      
+      // Try to find a price
+      const priceMatch = textContent.match(/[$€£₹]\s?\d+(?:[,.]\d{2})?/);
+      let priceMin = null;
+      if (priceMatch) {
+        priceMin = parseFloat(priceMatch[0].replace(/[^0-9.]/g, ''));
+      }
+      
+      // Try to find a name (longest text node that isn't a price)
+      let name = img?.getAttribute('alt') || 'Product';
+      if (name.length < 5 || name.toLowerCase().includes('product')) {
+         const texts = textContent.split('\n').map(t => t.trim()).filter(t => t.length > 5 && !t.includes('$'));
+         if (texts.length > 0) name = texts[0];
+      }
+      
+      prods.push({
+        name: name.slice(0, 100),
+        priceMin,
+        imageUrl,
+        sourceUrl,
+        category: ''
+      });
+      seenUrls.add(sourceUrl);
+      
+      if (prods.length >= 50) break;
+    }
+    return prods;
+  });
+
   return {
     url,
     pageTitle,
@@ -89,15 +195,18 @@ async function extractPageData(page: puppeteer.Page, url: string, isSubpage: boo
     emails,
     phones,
     links,
+    images,
+    products,
     contentLength: html.length,
   };
 }
 
-export async function scrapeWithPuppeteer(mainUrl: string): Promise<ScrapedContent> {
+export async function scrapeWithPuppeteer(mainUrl: string, target: string = 'all'): Promise<ScrapedContent> {
   const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+      headless: true,
+      userDataDir: './.puppeteer_data',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
 
   try {
     const page = await browser.newPage();
@@ -117,7 +226,7 @@ export async function scrapeWithPuppeteer(mainUrl: string): Promise<ScrapedConte
 
     const subpagesData = [];
 
-    if (targetLinks.length > 0) {
+    if (targetLinks.length > 0 && target !== 'images') {
       console.log(`[DeepCrawl] Found ${targetLinks.length} target sub-pages. Crawling...`);
       // We process sequentially to avoid overwhelming memory/CPU on local machine
       for (const link of targetLinks) {
@@ -135,8 +244,8 @@ export async function scrapeWithPuppeteer(mainUrl: string): Promise<ScrapedConte
     }
 
     // Combine all data
-    const allEmails = [...new Set([...mainData.emails, ...subpagesData.flatMap(d => d.emails)])];
-    const allPhones = [...new Set([...mainData.phones, ...subpagesData.flatMap(d => d.phones)])];
+    const allEmails = [...new Set([...mainData.emails, ...subpagesData.flatMap(d => d.emails)])] as string[];
+    const allPhones = [...new Set([...mainData.phones, ...subpagesData.flatMap(d => d.phones)])] as string[];
     const allHeadings = [...mainData.headings, ...subpagesData.flatMap(d => d.headings)].slice(0, 100);
     const combinedMarkdown = [
       `# MAIN PAGE (${mainData.url})`, 
@@ -154,7 +263,8 @@ export async function scrapeWithPuppeteer(mainUrl: string): Promise<ScrapedConte
       emails: allEmails.slice(0, 30),
       phones: allPhones.slice(0, 15),
       links: mainData.links.slice(0, 100),
-      images: [], // Images are less important for our AI extraction, keeping empty to save space
+      images: (target === 'images' || target === 'all') ? mainData.images : [],
+      extractedProducts: (target === 'images' || target === 'all') ? (mainData.products || []) : [],
       contentLength: mainData.contentLength + subpagesData.reduce((acc, d) => acc + d.contentLength, 0),
     };
   } finally {

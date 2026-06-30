@@ -5,6 +5,8 @@ import { analyzeWebsite } from '@/lib/ai/analyzers/website-analyzer';
 import { detectGaps } from '@/lib/ai/analyzers/gap-detector';
 import { generatePitchAngles } from '@/lib/ai/analyzers/pitch-generator';
 import { answerBrandQuestion } from '@/lib/ai/analyzers/qa-analyzer';
+import { generateFinancialIntelligence } from '@/lib/ai/analyzers/financial-analyzer';
+import { runAllSearches } from '@/lib/scraper/search-orchestrator';
 import { checkOllamaHealth } from '@/lib/ai/ollama-client';
 import { revalidatePath } from 'next/cache';
 
@@ -30,15 +32,13 @@ export async function runWebsiteAnalysis(brandId: string, preFetchedModelPref?: 
 
   if (!brand) return { error: 'Brand not found' };
 
-  // Get the latest successful scrape's markdown
-  const latestScrape = brand.scrapeLogs[0];
-  if (!latestScrape) {
-    return { error: 'No successful scrape found. Please scrape the brand first.' };
+  if (!brand.website) {
+    return { error: 'Brand website URL is required for analysis. Please add a website.' };
   }
 
   // We need to re-scrape to get the markdown content (we don't store raw content in DB)
   const { scrapeUrl } = await import('@/lib/scraper');
-  const scrapeResult = await scrapeUrl(brand.website);
+  const scrapeResult = await scrapeUrl(brand.website, null, 'overview');
 
   if (!scrapeResult.success || !scrapeResult.content) {
     return { error: 'Failed to fetch content for analysis' };
@@ -264,11 +264,21 @@ export async function runPipelineScoring(brandId: string) {
 
   if (!brand) return { error: 'Brand not found' };
 
-  const websiteAnalysis = brand.aiAnalyses.find(a => a.analysisType === 'website_understanding');
-  const gapDetection = brand.aiAnalyses.find(a => a.analysisType === 'gap_detection');
+  let websiteAnalysis = brand.aiAnalyses.find(a => a.analysisType === 'website_understanding');
+  if (!websiteAnalysis) {
+    const res = await runWebsiteAnalysis(brandId, modelPref);
+    if (res.error || !res.analysisId) return { error: res.error || 'Website analysis failed to run automatically.' };
+    websiteAnalysis = await prisma.aIAnalysis.findUnique({ where: { id: res.analysisId } }) as any;
+  }
 
-  if (!websiteAnalysis) return { error: 'Website analysis must be run first.' };
-  if (!gapDetection) return { error: 'Gap detection must be run first.' };
+  let gapDetection = brand.aiAnalyses.find(a => a.analysisType === 'gap_detection');
+  if (!gapDetection) {
+    const res = await runGapDetection(brandId, modelPref);
+    if (res.error || !res.analysisId) return { error: res.error || 'Gap detection failed to run automatically.' };
+    gapDetection = await prisma.aIAnalysis.findUnique({ where: { id: res.analysisId } }) as any;
+  }
+
+  if (!websiteAnalysis || !gapDetection) return { error: 'Failed to satisfy AI dependencies.' };
 
   try {
     const { scoring, rawResponse, model } = await scorePipeline(
@@ -414,4 +424,63 @@ export async function generateDraft(brandId: string, contactId: string, stage: 1
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to generate email draft' };
   }
+}
+
+export async function generateFinancialIntelligenceAction(brandId: string, preFetchedModelPref?: 'ollama' | 'gemini') {
+  let modelPref = preFetchedModelPref;
+  if (!modelPref) {
+    try {
+      const { getModelPreference } = await import('@/actions/settings-actions');
+      modelPref = await getModelPreference();
+    } catch {
+      modelPref = 'gemini';
+    }
+  }
+
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId },
+    include: {
+      scrapeLogs: { orderBy: { scrapedAt: 'desc' }, take: 3 }
+    }
+  });
+
+  if (!brand) return { error: 'Brand not found' };
+
+  // 1. Run AI Search for manufacturing context
+  let searchContext = '';
+  try {
+    const aiResults = await runAllSearches(null, `"${brand.name}" apparel manufacturing cost margins FOB price`);
+    searchContext = aiResults.map(r => `Title: ${r.title}\nSnippet: ${r.snippet}`).join('\n\n');
+  } catch (e) {
+    console.error('AI search failed for financials', e);
+  }
+
+  // 2. Combine with scraped logs
+  let scrapedContext = brand.scrapeLogs.map(l => l.scrapedData).filter(Boolean).join('\n\n');
+  
+  const combinedContext = `SEARCH CONTEXT:\n${searchContext}\n\nSCRAPED CONTEXT:\n${scrapedContext}`.slice(0, 15000);
+
+  // 3. Generate structured intelligence
+  const intelligence = await generateFinancialIntelligence(
+    brand.name,
+    brand.priceRange,
+    brand.segment,
+    combinedContext,
+    modelPref
+  );
+
+  // Mark as AI estimated
+  const finalData = {
+    ...intelligence,
+    isAiEstimated: true
+  };
+
+  // 4. Save back to brand
+  await prisma.brand.update({
+    where: { id: brandId },
+    data: { pipelineData: JSON.stringify(finalData) }
+  });
+
+  revalidatePath(`/brands/${brandId}`);
+  return { success: true, data: finalData };
 }

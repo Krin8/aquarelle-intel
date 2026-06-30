@@ -22,6 +22,14 @@ export interface ScrapedDocument {
   type: string;
 }
 
+export interface ScrapedProduct {
+  name: string;
+  priceMin?: number;
+  imageUrl: string;
+  category?: string;
+  sourceUrl: string;
+}
+
 export interface ScrapedContent {
   pageTitle: string;
   metaDescription: string;
@@ -35,6 +43,7 @@ export interface ScrapedContent {
   contentLength: number;
   extractedContacts?: ScrapedContact[];
   extractedDocuments?: ScrapedDocument[];
+  extractedProducts?: ScrapedProduct[];
 }
 
 export interface ScrapeResult {
@@ -65,7 +74,7 @@ async function rateLimitCheck(url: string): Promise<void> {
   lastScrapeTime[domain] = Date.now();
 }
 
-export async function scrapeUrl(url: string, corporateUrl?: string | null): Promise<ScrapeResult> {
+export async function scrapeUrl(url: string, corporateUrl?: string | null, target: string = 'all'): Promise<ScrapeResult> {
   // Add protocol if missing
   if (!/^https?:\/\//i.test(url)) {
     url = `https://${url}`;
@@ -105,8 +114,8 @@ export async function scrapeUrl(url: string, corporateUrl?: string | null): Prom
     const pythonScript = path.join(process.cwd(), 'python-scraper', 'run_spider.py');
     const venvPython = path.join(process.cwd(), 'python-scraper', 'venv', 'bin', 'python3');
     
-    // Build arguments. We pass corporateUrl as the second arg if it exists.
-    const args = `"${venvPython}" "${pythonScript}" "${url}"` + (corporateUrl ? ` "${corporateUrl}"` : "");
+    // Build arguments. We pass corporateUrl as the second arg if it exists, and target as the third.
+    const args = `"${venvPython}" "${pythonScript}" "${url}" "${corporateUrl || ''}" "${target}"`;
     const { stdout, stderr } = await execAsync(args, { maxBuffer: 1024 * 1024 * 10 }); // 10MB buffer
     
     // Scrapy logs go to stderr, but our JSON goes to stdout
@@ -119,9 +128,10 @@ export async function scrapeUrl(url: string, corporateUrl?: string | null): Prom
     const pages = result.data.pages || [];
     const contacts = result.data.contacts || [];
     const documents = result.data.documents || [];
+    const products = result.data.products || [];
 
-    if (pages.length === 0) {
-        throw new Error('Scrapy extracted 0 pages (maybe blocked or empty)');
+    if (pages.length === 0 || (target === 'images' && products.length === 0)) {
+        throw new Error('Scrapy extracted 0 pages/products (maybe blocked or empty)');
     }
 
     const firstPage = pages[0];
@@ -135,10 +145,11 @@ export async function scrapeUrl(url: string, corporateUrl?: string | null): Prom
       emails: contacts.filter((c: any) => c.email).map((c: any) => c.email),
       phones: contacts.filter((c: any) => c.phone).map((c: any) => c.phone),
       links: [],
-      images: [],
+      images: pages.flatMap((p: any) => (p.images || []).map((img: any) => ({ src: img.src || '', alt: img.alt || '' }))).filter((img: any, i: number, arr: any[]) => arr.findIndex(x => x.src === img.src) === i).slice(0, 50),
       contentLength: pages.reduce((acc: number, p: any) => acc + (p.content_length || 0), 0),
       extractedContacts: contacts,
-      extractedDocuments: documents
+      extractedDocuments: documents,
+      extractedProducts: products
     };
 
     const contentHash = crypto
@@ -163,7 +174,7 @@ export async function scrapeUrl(url: string, corporateUrl?: string | null): Prom
     console.log(`Scrapy blocked or failed with ${errMsg}, falling back to Puppeteer stealth...`);
     try {
       const { scrapeWithPuppeteer } = await import('./puppeteer-scraper');
-      const content = await scrapeWithPuppeteer(url);
+      const content = await scrapeWithPuppeteer(url, target);
       const contentHash = crypto
         .createHash('md5')
         .update(content.bodyText.slice(0, 1000))

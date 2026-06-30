@@ -1,11 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { updateBrandStatus, deleteBrand, importApolloCsv } from '@/actions/brand-actions';
-import { scrapeBrand } from '@/actions/scrape-actions';
-import { runWebsiteAnalysis, runGapDetection, runPitchGeneration, runPipelineScoring, submitFeedback, askBrandQuestion, generateDraft } from '@/actions/ai-actions';
+import { ContactDetailsModal } from './ContactDetailsModal';
+import { ApiKeyModal } from './ApiKeyModal';
+import ReactMarkdown from 'react-markdown';
+import { updateBrandStatus, deleteBrand, importApolloCsv, updateBrandFinancials } from '@/actions/brand-actions';
+import { scrapeBrand, getBrandStatus, generateMoreContacts } from '@/actions/scrape-actions';
+import { runWebsiteAnalysis, runGapDetection, runPitchGeneration, runPipelineScoring, submitFeedback, askBrandQuestion, generateDraft, generateFinancialIntelligenceAction } from '@/actions/ai-actions';
 import { addNote, deleteNote, togglePinNote } from '@/actions/note-actions';
+import { EcosystemGraph } from './EcosystemGraph';
+import { CompetitorDashboard } from './CompetitorDashboard';
+import { SupplierIntelligenceDashboard } from './SupplierIntelligenceDashboard';
+import { CompanyOverviewTable } from './CompanyOverviewTable';
 
 type BrandWithRelations = {
   id: string;
@@ -17,6 +24,14 @@ type BrandWithRelations = {
   status: string;
   customerType: string;
   region: string;
+  parentCompany: string | null;
+  countryOfOrigin: string | null;
+  city: string | null;
+  state: string | null;
+  turnover: string | null;
+  storesCount: number | null;
+  retailPriceMensShirt: string | null;
+  productType: string | null;
   segment: string | null;
   priceRange: string | null;
   description: string | null;
@@ -25,15 +40,15 @@ type BrandWithRelations = {
   lastScrapedAt: Date | null;
   createdAt: Date;
   complianceNotes: string | null;
-  products: { id: string; name: string; category: string | null; priceMin: number | null; priceMax: number | null; confidence: number }[];
-  contacts: { id: string; name: string; role: string | null; department: string | null; seniority: string | null; email: string | null; phone: string | null; buyerType: string; confidenceScore: number; source: string }[];
+  products: { id: string; name: string; category: string | null; priceMin: number | null; priceMax: number | null; confidence: number; imageUrl: string | null; sourceUrl: string | null }[];
+  contacts: { id: string; name: string; role: string | null; department: string | null; seniority: string | null; email: string | null; phone: string | null; buyerType: string; confidenceScore: number; source: string; areasOfResponsibility: string | null; yearsInRole: number | null; relevanceScore: number | null; isVerified: boolean; outreachStrategy: { whyMatters: string | null; valueProposition: string | null; recommendedPath: string | null } | null }[];
   documents: { id: string; title: string; type: string; url: string; scrapedAt: Date }[];
   aiAnalyses: { id: string; analysisType: string; response: string; structuredData: string | null; modelUsed: string; feedbackRating: string | null; createdAt: Date; prompt: string }[];
   notes: { id: string; content: string; category: string; pinned: boolean; createdAt: Date }[];
   scrapeLogs: { id: string; url: string; method: string; status: string; scrapedAt: Date; errorMessage: string | null; contentLength: number | null; pageTitle: string | null; metaDescription: string | null; scrapedData: string | null }[];
 };
 
-const TABS = ['Overview', 'Documents', 'Contacts', 'AI Insights', 'Notes', 'Scrape History'];
+const TABS = ['Overview', 'Images', 'Supplier Intelligence', 'Competitors', 'Contacts', 'AI Insights', 'Notes'];
 const STATUSES = ['discovered', 'researching', 'analyzed', 'qualified', 'rejected'];
 const CUSTOMER_TYPES = ['new', 'pipeline', 'existing'];
 
@@ -50,6 +65,22 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
   const [activeTab, setActiveTab] = useState('Overview');
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
+
+  const handleGenerateMoreContacts = async () => {
+    try {
+      setLoading('generating_contacts');
+      const res = await generateMoreContacts(brand.id);
+      if (res.error) {
+        alert(res.error);
+      }
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate contacts');
+    } finally {
+      setLoading('');
+    }
+  };
   
   // Pitch Template Selection
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
@@ -79,6 +110,38 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
   const [draftingContactId, setDraftingContactId] = useState<string | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subjectLine: string, body: string } | null>(null);
 
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  
+  // Scrape target state
+  const [scrapeTarget, setScrapeTarget] = useState<'all' | 'contacts' | 'overview' | 'images'>('all');
+
+  // Background scrape polling state
+  const [isScraping, setIsScraping] = useState(brand.status === 'researching');
+
+  // Poll for background scrape completion
+  useEffect(() => {
+    if (!isScraping) return;
+    const interval = setInterval(async () => {
+      try {
+        const { status } = await getBrandStatus(brand.id);
+        if (status !== 'researching') {
+          setIsScraping(false);
+          router.refresh();
+        }
+      } catch (e) {
+        // Ignore polling errors
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isScraping, brand.id, router]);
+
+  // Financial Intelligence State
+  const parsedFin = (() => {
+    try {
+      return (brand as any).pipelineData ? JSON.parse((brand as any).pipelineData) : {};
+    } catch { return {}; }
+  })();
+
   async function handleAction(action: string) {
     setError('');
     setLoading(action);
@@ -86,7 +149,11 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
       let result;
       switch (action) {
         case 'scrape':
-          result = await scrapeBrand(brand.id, { useDataProvider, useLinkedin });
+          result = await scrapeBrand(brand.id, { useDataProvider, useLinkedin, target: scrapeTarget });
+          if (result && !result.error) {
+            // Scrape is running in the background — start polling
+            setIsScraping(true);
+          }
           break;
         case 'analyze':
           result = await runWebsiteAnalysis(brand.id);
@@ -97,15 +164,33 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
         case 'pitch':
           result = await runPitchGeneration(brand.id, selectedTemplateId || undefined);
           break;
+        case 'financial_intelligence':
+          result = await generateFinancialIntelligenceAction(brand.id);
+          break;
         default:
           return;
       }
-      if (result?.error) setError(result.error);
+      if (result?.error) {
+        if (result.error === 'API_KEYS_EXHAUSTED') {
+          setShowApiKeyModal(true);
+        } else {
+          setError(result.error);
+        }
+      }
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Action failed');
+      if (e instanceof Error && e.message === 'API_KEYS_EXHAUSTED') {
+        setShowApiKeyModal(true);
+      } else {
+        setError(e instanceof Error ? e.message : 'Action failed');
+      }
     } finally {
-      setLoading('');
+      // Don't clear loading for scrape — the polling effect handles it
+      if (action !== 'scrape') {
+        setLoading('');
+      } else {
+        setLoading('');
+      }
     }
   }
 
@@ -149,6 +234,18 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
     const { updateContactConnections } = await import('@/actions/brand-actions');
     await updateContactConnections(contactId, connections);
     router.refresh();
+  }
+
+  async function handleDeleteContact(contactId: string) {
+    if (confirm('Are you sure you want to delete this contact?')) {
+      const { deleteContact } = await import('@/actions/brand-actions');
+      const res = await deleteContact(contactId);
+      if (res.error) {
+        setError(res.error);
+      } else {
+        router.refresh();
+      }
+    }
   }
 
   async function handleDelete() {
@@ -354,12 +451,22 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
         <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select
+                value={scrapeTarget}
+                onChange={e => setScrapeTarget(e.target.value as any)}
+                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}
+              >
+                <option value="all">Scrape All Data</option>
+                <option value="contacts">Contacts Only</option>
+                <option value="overview">Overview Only</option>
+                <option value="images">Images Only</option>
+              </select>
               <button
                 className="btn btn-secondary btn-sm"
                 onClick={() => handleAction('scrape')}
-                disabled={loading === 'scrape'}
+                disabled={loading === 'scrape' || isScraping}
               >
-                {loading === 'scrape' ? <><span className="spinner"></span> Scraping...</> : '🔍 Re-scrape'}
+                {loading === 'scrape' || isScraping ? <><span className="spinner"></span> Scraping in background...</> : '🔍 Re-scrape'}
               </button>
               <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={useDataProvider} onChange={e => setUseDataProvider(e.target.checked)} />
@@ -446,9 +553,9 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
             <button 
               className="btn btn-secondary btn-sm" 
               onClick={handlePipelineScoring}
-              disabled={loading === 'scoring_pipeline' || !latestGapDetection}
+              disabled={loading === 'scoring_pipeline'}
               style={{ width: '100%' }}
-              title={!latestGapDetection ? "Run Gap Detection first" : "Estimate Pipeline Score"}
+              title="Estimate Pipeline Score"
             >
               {loading === 'scoring_pipeline' ? '⏳ Scoring...' : '🪄 Estimate Score'}
             </button>
@@ -503,6 +610,10 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
         <button className="btn btn-danger btn-sm" onClick={handleDelete} style={{ marginLeft: 'auto' }}>
           Delete Brand
         </button>
+      </div>
+
+      <div style={{ marginBottom: 'var(--space-lg)' }}>
+        <CompanyOverviewTable brand={brand} />
       </div>
 
       {/* Tabs */}
@@ -615,6 +726,70 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
         </div>
       )}
 
+      {activeTab === 'Images' && (() => {
+        return (
+        <div className="animate-fade-in card">
+          {/* Products Section */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-lg)' }}>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 600 }}>
+              Products (Scraped from {brand.website.replace(/^https?:\/\//, '')})
+            </h3>
+            {brand.products.length > 0 && <span className="status-badge discovered">Live Data</span>}
+          </div>
+          
+          {brand.products.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">🛍️</div>
+              <div className="empty-state-title">No products found</div>
+              <p className="empty-state-description">Try re-scraping the brand with &quot;Images Only&quot; selected to capture structured products and prices.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--space-lg)' }}>
+              {brand.products.map(product => (
+                <div key={product.id} style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)' }}>
+                  <div style={{ height: '240px', width: '100%', position: 'relative', background: '#f5f5f5' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {product.imageUrl ? (
+                      <a href={product.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%', height: '100%' }}>
+                        <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </a>
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>No Image</div>
+                    )}
+                    {(() => {
+                      const lowerName = product.name.toLowerCase();
+                      let displayCat = product.category || 'Casual Shirt';
+                      if (lowerName.includes('flannel')) displayCat = 'Flannel';
+                      else if (lowerName.includes('oxford')) displayCat = 'Oxford';
+                      else if (lowerName.includes('denim') || lowerName.includes('chambray')) displayCat = 'Denim';
+                      else if (lowerName.includes('linen')) displayCat = 'Linen';
+                      else if (lowerName.includes('polo')) displayCat = 'Polo';
+                      else if (lowerName.includes('twill')) displayCat = 'Twill';
+                      else if (lowerName.includes('corduroy')) displayCat = 'Corduroy';
+                      else if (lowerName.includes('poplin')) displayCat = 'Poplin';
+                      else if (lowerName.includes('plaid')) displayCat = 'Plaid';
+                      
+                      return (
+                        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(255, 255, 255, 0.9)', padding: '4px 8px', borderRadius: 'var(--radius-sm)', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', zIndex: 2 }}>
+                          {displayCat}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div style={{ padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', flexGrow: 1, justifyContent: 'space-between' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px', lineHeight: 1.4 }}>{product.name}</h4>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent-emerald)' }}>
+                      {product.priceMin !== null ? `$${product.priceMin.toFixed(2)}` : 'Price TBD'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        );
+      })()}
+
       {activeTab === 'Documents' && (
         <div className="animate-fade-in">
           {brand.documents?.length === 0 ? (
@@ -660,74 +835,84 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
             </div>
           )}
           
-          {/* Financial Intelligence (from SOP Pipeline Data) */}
-          {(brand as any).pipelineData && (() => {
-            try {
-              const fin = JSON.parse((brand as any).pipelineData);
-              return (
-                <div className="card" style={{ gridColumn: '1 / -1' }}>
-                  <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 600, marginBottom: 'var(--space-md)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>📊</span> Internal Financial Intelligence
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>(from SOP Pipeline)</span>
-                  </h3>
-                  <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}>
-                    {fin.fobPrice && (
-                      <div className="stat-card">
-                        <span className="stat-card-label">FOB Price</span>
-                        <span className="stat-card-value" style={{ color: 'var(--accent-emerald)' }}>${fin.fobPrice}</span>
-                      </div>
-                    )}
-                    {fin.stdCPU && (
-                      <div className="stat-card">
-                        <span className="stat-card-label">Std CPU</span>
-                        <span className="stat-card-value">₹{fin.stdCPU}</span>
-                      </div>
-                    )}
-                    {fin.stdMargin && (
-                      <div className="stat-card">
-                        <span className="stat-card-label">Std Margin</span>
-                        <span className="stat-card-value">₹{fin.stdMargin}</span>
-                      </div>
-                    )}
-                    {fin.profitPct !== undefined && (
-                      <div className="stat-card">
-                        <span className="stat-card-label">Profit %</span>
-                        <span className="stat-card-value" style={{ color: fin.profitPct > 0.05 ? 'var(--accent-emerald)' : fin.profitPct > 0 ? 'var(--accent-amber)' : 'var(--accent-rose)' }}>
-                          {(fin.profitPct * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                    )}
-                    {fin.smv && (
-                      <div className="stat-card">
-                        <span className="stat-card-label">SMV</span>
-                        <span className="stat-card-value">{fin.smv} min</span>
-                      </div>
-                    )}
-                    {fin.cpuGrade && (
-                      <div className="stat-card">
-                        <span className="stat-card-label">CPU Grade</span>
-                        <span className="stat-card-value">{fin.cpuGrade}</span>
-                      </div>
-                    )}
-                    {fin.prospectForAqrlMur && (
-                      <div className="stat-card">
-                        <span className="stat-card-label">Aqrl Mauritius</span>
-                        <span className="stat-card-value" style={{ color: fin.prospectForAqrlMur === 'Yes' ? 'var(--accent-emerald)' : 'var(--accent-rose)' }}>
-                          {fin.prospectForAqrlMur}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+          {/* Financial Intelligence */}
+          <div className="card" style={{ gridColumn: '1 / -1' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-md)' }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>📊</span> Internal Financial Intelligence
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>(from SOP Pipeline)</span>
+                {parsedFin.isAiEstimated && (
+                  <span style={{ fontSize: '10px', backgroundColor: 'var(--accent-indigo)', color: '#fff', padding: '2px 6px', borderRadius: '4px', marginLeft: 'auto' }}>AI Estimated</span>
+                )}
+              </h3>
+              <button 
+                className="button-secondary" 
+                onClick={() => handleAction('financial_intelligence')} 
+                disabled={loading === 'financial_intelligence'}
+                style={{ fontSize: '12px', padding: '4px 10px' }}
+              >
+                {loading === 'financial_intelligence' ? 'Generating...' : '✨ Auto-Generate with AI'}
+              </button>
+            </div>
+
+            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', opacity: loading === 'financial_intelligence' ? 0.5 : 1 }}>
+                <div className="stat-card">
+                  <span className="stat-card-label">FOB Price</span>
+                  <span className="stat-card-value" style={{ color: parsedFin.fobPrice ? 'var(--accent-emerald)' : 'var(--text-muted)' }}>
+                    {parsedFin.fobPrice ? `$${parsedFin.fobPrice}` : 'N/A'}
+                  </span>
                 </div>
-              );
-            } catch { return null; }
-          })()}
+                <div className="stat-card">
+                  <span className="stat-card-label">Std CPU</span>
+                  <span className="stat-card-value" style={{ color: parsedFin.stdCPU ? 'inherit' : 'var(--text-muted)' }}>
+                    {parsedFin.stdCPU ? `₹${parsedFin.stdCPU}` : 'N/A'}
+                  </span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-card-label">Std Margin</span>
+                  <span className="stat-card-value" style={{ color: parsedFin.stdMargin ? 'inherit' : 'var(--text-muted)' }}>
+                    {parsedFin.stdMargin ? `₹${parsedFin.stdMargin}` : 'N/A'}
+                  </span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-card-label">Profit %</span>
+                  <span className="stat-card-value" style={{ 
+                    color: parsedFin.profitPct === undefined ? 'var(--text-muted)' 
+                      : parsedFin.profitPct > 0.05 ? 'var(--accent-emerald)' 
+                      : parsedFin.profitPct > 0 ? 'var(--accent-amber)' : 'var(--accent-rose)' 
+                  }}>
+                    {parsedFin.profitPct !== undefined ? `${(parsedFin.profitPct * 100).toFixed(1)}%` : 'N/A'}
+                  </span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-card-label">SMV</span>
+                  <span className="stat-card-value" style={{ color: parsedFin.smv ? 'inherit' : 'var(--text-muted)' }}>
+                    {parsedFin.smv ? `${parsedFin.smv} min` : 'N/A'}
+                  </span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-card-label">CPU Grade</span>
+                  <span className="stat-card-value" style={{ color: parsedFin.cpuGrade ? 'inherit' : 'var(--text-muted)' }}>
+                    {parsedFin.cpuGrade || 'N/A'}
+                  </span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-card-label">Aqrl Mauritius</span>
+                  <span className="stat-card-value" style={{ color: parsedFin.prospectForAqrlMur === 'Yes' ? 'var(--accent-emerald)' : parsedFin.prospectForAqrlMur === 'No' ? 'var(--accent-rose)' : 'var(--text-muted)' }}>
+                    {parsedFin.prospectForAqrlMur || 'N/A'}
+                  </span>
+                </div>
+            </div>
+          </div>
         </div>
       )}
 
       {activeTab === 'Contacts' && (
         <div className="animate-fade-in">
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-md)', gap: '8px' }}>
+            <button className="btn btn-primary btn-sm" onClick={handleGenerateMoreContacts} disabled={loading === 'generating_contacts'}>
+              {loading === 'generating_contacts' ? '⏳ Generating...' : '✨ Generate More'}
+            </button>
             <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
               {loading === 'importing_apollo' ? '⏳ Importing...' : '➕ Import Apollo CSV'}
               <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleApolloImport} disabled={loading === 'importing_apollo'} />
@@ -754,76 +939,122 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
                   className={`animate-fade-in animate-fade-in-delay-${Math.min(i + 1, 4)}`}
                   style={{
                     display: 'flex',
-                    alignItems: 'center',
+                    flexDirection: 'column',
                     padding: '12px 16px',
                     background: 'var(--bg-card)',
                     border: '1px solid var(--border-color)',
                     borderRadius: '8px',
-                    gap: '16px'
+                    gap: '12px'
                   }}
                 >
-                  <div style={{ flex: '1.5', minWidth: '150px' }}>
-                    <div style={{ fontWeight: 600, fontSize: '14px' }}>{contact.name}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.role || '—'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ flex: '1.5', minWidth: '150px' }}>
+                      <div style={{ fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {contact.name}
+                        {contact.relevanceScore && contact.relevanceScore >= 80 && (
+                          <span style={{ fontSize: '10px', background: 'var(--accent-indigo)', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>HIGH RELEVANCE</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{contact.role || '—'}</div>
+                      {contact.yearsInRole && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>🕒 {contact.yearsInRole} years in role</div>}
+                    </div>
+
+                    <div style={{ flex: '1' }}>
+                      {contact.department ? <span className="filter-chip" style={{ fontSize: '11px', padding: '2px 6px' }}>{contact.department}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </div>
+
+                    <div style={{ flex: '1.5', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '12px' }}>
+                      {contact.email ? <span style={{ color: 'var(--accent-indigo)' }}>✉️ {contact.email}</span> : null}
+                      {contact.phone ? <span style={{ color: 'var(--text-secondary)' }}>📞 {contact.phone}</span> : null}
+                    </div>
+
+                    <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <span className={`status-badge ${contact.buyerType === 'decision_maker' ? 'qualified' : contact.buyerType === 'influencer' ? 'analyzed' : 'discovered'}`}>
+                        {contact.buyerType.replace(/_/g, ' ')}
+                      </span>
+                      {(contact as any).officeLocation && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>📍 {(contact as any).officeLocation}</span>}
+                      {(contact as any).reportingStructure && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>🔗 {(contact as any).reportingStructure}</span>}
+                    </div>
+
+                    <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{
+                        color: contact.confidenceScore >= 0.7 ? 'var(--accent-emerald)' : contact.confidenceScore >= 0.4 ? 'var(--accent-amber)' : 'var(--accent-rose)',
+                        fontWeight: 600,
+                        fontSize: '13px'
+                      }}>
+                        {Math.round(contact.confidenceScore * 100)}% Conf.
+                      </span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{contact.source}</span>
+                      {contact.relevanceScore && <span style={{ color: 'var(--accent-indigo)', fontSize: '11px', fontWeight: 'bold' }}>⭐ Score: {contact.relevanceScore}/100</span>}
+                    </div>
+
+                    <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <input 
+                        type="text" 
+                        className="input" 
+                        placeholder="Mutual Connections..." 
+                        defaultValue={(contact as any).mutualConnections || ''}
+                        onBlur={(e) => handleSaveConnections(contact.id, e.target.value)}
+                        style={{ fontSize: '11px', padding: '4px', background: 'var(--bg-tertiary)', border: '1px dashed var(--border-color)' }}
+                      />
+                    </div>
+
+                    <div style={{ flex: '0.8', textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <button 
+                        className="btn btn-secondary btn-sm" 
+                        onClick={() => handleGenerateEmail(contact.id, 1)}
+                        disabled={draftingContactId === contact.id}
+                        style={{ fontSize: '10px', padding: '2px 6px' }}
+                      >
+                        {draftingContactId === contact.id && !emailDraft ? <span className="spinner"></span> : '✉️ Stage 1'}
+                      </button>
+                      <button 
+                        className="btn btn-secondary btn-sm" 
+                        onClick={() => handleGenerateEmail(contact.id, 2)}
+                        disabled={draftingContactId === contact.id}
+                        style={{ fontSize: '10px', padding: '2px 6px' }}
+                      >
+                        {draftingContactId === contact.id && !emailDraft ? <span className="spinner"></span> : '✉️ Stage 2'}
+                      </button>
+                    </div>
+                    <div style={{ paddingLeft: '8px', display: 'flex', alignItems: 'center' }}>
+                      <button
+                        onClick={() => handleDeleteContact(contact.id)}
+                        title="Delete Contact"
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--accent-rose)', fontSize: '14px', padding: '4px' }}
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
 
-                  <div style={{ flex: '1' }}>
-                    {contact.department ? <span className="filter-chip" style={{ fontSize: '11px', padding: '2px 6px' }}>{contact.department}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                  </div>
-
-                  <div style={{ flex: '1.5', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '12px' }}>
-                    {contact.email ? <span style={{ color: 'var(--accent-indigo)' }}>✉️ {contact.email}</span> : null}
-                    {contact.phone ? <span style={{ color: 'var(--text-secondary)' }}>📞 {contact.phone}</span> : null}
-                  </div>
-
-                  <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span className={`status-badge ${contact.buyerType === 'decision_maker' ? 'qualified' : contact.buyerType === 'influencer' ? 'analyzed' : 'discovered'}`}>
-                      {contact.buyerType.replace(/_/g, ' ')}
-                    </span>
-                    {(contact as any).officeLocation && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>📍 {(contact as any).officeLocation}</span>}
-                    {(contact as any).reportingStructure && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>🔗 {(contact as any).reportingStructure}</span>}
-                  </div>
-
-                  <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span style={{
-                      color: contact.confidenceScore >= 0.7 ? 'var(--accent-emerald)' : contact.confidenceScore >= 0.4 ? 'var(--accent-amber)' : 'var(--accent-rose)',
-                      fontWeight: 600,
-                      fontSize: '13px'
-                    }}>
-                      {Math.round(contact.confidenceScore * 100)}% Conf.
-                    </span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{contact.source}</span>
-                  </div>
-
-                  <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <input 
-                      type="text" 
-                      className="input" 
-                      placeholder="Mutual Connections..." 
-                      defaultValue={(contact as any).mutualConnections || ''}
-                      onBlur={(e) => handleSaveConnections(contact.id, e.target.value)}
-                      style={{ fontSize: '11px', padding: '4px', background: 'var(--bg-tertiary)', border: '1px dashed var(--border-color)' }}
-                    />
-                  </div>
-
-                  <div style={{ flex: '0.8', textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <button 
-                      className="btn btn-secondary btn-sm" 
-                      onClick={() => handleGenerateEmail(contact.id, 1)}
-                      disabled={draftingContactId === contact.id}
-                      style={{ fontSize: '10px', padding: '2px 6px' }}
-                    >
-                      {draftingContactId === contact.id && !emailDraft ? <span className="spinner"></span> : '✉️ Stage 1'}
-                    </button>
-                    <button 
-                      className="btn btn-secondary btn-sm" 
-                      onClick={() => handleGenerateEmail(contact.id, 2)}
-                      disabled={draftingContactId === contact.id}
-                      style={{ fontSize: '10px', padding: '2px 6px' }}
-                    >
-                      {draftingContactId === contact.id && !emailDraft ? <span className="spinner"></span> : '✉️ Stage 2'}
-                    </button>
-                  </div>
+                  {/* Buyer Intelligence Expansion */}
+                  {(contact.areasOfResponsibility || contact.outreachStrategy) && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', background: 'rgba(99, 102, 241, 0.04)', borderRadius: '6px', borderLeft: '3px solid var(--accent-indigo)', marginTop: '4px' }}>
+                      {contact.areasOfResponsibility && (
+                        <div>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Areas of Responsibility</span>
+                          <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                            {typeof contact.areasOfResponsibility === 'string' 
+                              ? (contact.areasOfResponsibility.startsWith('[') ? JSON.parse(contact.areasOfResponsibility).join(', ') : contact.areasOfResponsibility)
+                              : contact.areasOfResponsibility}
+                          </div>
+                        </div>
+                      )}
+                      {contact.outreachStrategy && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '4px' }}>
+                          <div>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Why They Matter</span>
+                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: '1.4' }}>{contact.outreachStrategy.whyMatters}</div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Value Proposition</span>
+                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: '1.4' }}>{contact.outreachStrategy.valueProposition}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1111,7 +1342,7 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
             <div className="ai-section-header">
               <div className="ai-section-icon gaps">◈</div>
               <div>
-                <div className="ai-section-title">Gap Detection vs CIEL Textiles</div>
+                <div className="ai-section-title">Gap Detection vs Aquarelle</div>
                 <div className="ai-section-subtitle">
                   {latestGapDetection
                     ? `Detected ${new Date(latestGapDetection.createdAt).toLocaleDateString()} · ${latestGapDetection.modelUsed}`
@@ -1444,13 +1675,30 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
                     <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-rose)' }} onClick={() => {
                       if (confirm('Delete this note?')) deleteNote(note.id).then(() => router.refresh());
                     }}>
-                      Delete
                     </button>
                   </div>
                 </div>
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'Ecosystem' && (
+        <div className="animate-fade-in" style={{ height: 'calc(100vh - 200px)' }}>
+          <EcosystemGraph brandId={brand.id} />
+        </div>
+      )}
+
+      {activeTab === 'Competitors' && (
+        <div className="animate-fade-in">
+          <CompetitorDashboard brandId={brand.id} />
+        </div>
+      )}
+
+      {activeTab === 'Supplier Intelligence' && (
+        <div className="animate-fade-in">
+          <SupplierIntelligenceDashboard brandId={brand.id} />
         </div>
       )}
 
@@ -1593,6 +1841,15 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
           )}
         </div>
       )}
+      
+      <ApiKeyModal 
+        isOpen={showApiKeyModal} 
+        onSave={() => {
+          setShowApiKeyModal(false);
+          handleAction('scrape'); // Auto resume
+        }} 
+        onCancel={() => setShowApiKeyModal(false)} 
+      />
     </div>
   );
 }

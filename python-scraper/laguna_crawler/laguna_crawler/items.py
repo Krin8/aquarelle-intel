@@ -24,3 +24,10 @@ class DocumentItem(scrapy.Item):
     url = scrapy.Field()
     title = scrapy.Field()
     type = scrapy.Field() # catalog, lookbook, investor_report, other
+
+class ProductItem(scrapy.Item):
+    name = scrapy.Field()
+    priceMin = scrapy.Field()
+    imageUrl = scrapy.Field()
+    category = scrapy.Field()
+    sourceUrl = scrapy.Field()

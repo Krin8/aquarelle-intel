@@ -22,7 +22,8 @@ export async function checkOllamaHealth(): Promise<{
 export async function generateStructuredResponse<T>(
   systemPrompt: string,
   userPrompt: string,
-  parseResponse: (text: string) => T
+  parseResponse: (text: string) => T,
+  useGoogleSearch?: boolean
 ): Promise<{ result: T; rawResponse: string; model: string }> {
   
   const controller = new AbortController();

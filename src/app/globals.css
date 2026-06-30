@@ -1,8 +1,8 @@
 /* ================================================================
-   CIEL TEXTILES MARKET INTELLIGENCE PLATFORM — Design System
+   AQUARELLE MARKET INTELLIGENCE PLATFORM — Design System
    ================================================================
-   Premium dark-mode UI with glassmorphism, vibrant accents,
-   and micro-animations.
+   Ultra-Premium dark-mode UI with glassmorphism, vibrant gradients,
+   and dynamic animations.
    ================================================================ */
 
 /* ---- Google Font Import ---- */
@@ -11,56 +11,57 @@
 /* ---- CSS Custom Properties ---- */
 :root {
   /* Background tones */
-  --bg-primary: #09090b;
-  --bg-secondary: #111114;
-  --bg-tertiary: #18181b;
-  --bg-elevated: #1e1e22;
-  --bg-surface: rgba(255, 255, 255, 0.03);
-  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-primary: #05050f;
+  --bg-secondary: rgba(13, 15, 30, 0.7);
+  --bg-tertiary: rgba(20, 22, 45, 0.6);
+  --bg-elevated: rgba(30, 32, 60, 0.8);
+  --bg-surface: rgba(255, 255, 255, 0.05);
+  --bg-hover: rgba(255, 255, 255, 0.1);
 
   /* Glass */
-  --glass-bg: rgba(255, 255, 255, 0.04);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-hover: rgba(255, 255, 255, 0.07);
+  --glass-bg: rgba(15, 20, 40, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-hover: rgba(255, 255, 255, 0.15);
 
   /* Text */
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
-  --text-muted: #52525b;
+  --text-primary: #ffffff;
+  --text-secondary: #c7d2fe;
+  --text-tertiary: #a5b4fc;
+  --text-muted: #6366f1;
 
-  /* Accent palette */
-  --accent-indigo: #818cf8;
-  --accent-indigo-hover: #6366f1;
-  --accent-indigo-glow: rgba(129, 140, 248, 0.15);
-  --accent-violet: #a78bfa;
-  --accent-emerald: #34d399;
-  --accent-emerald-glow: rgba(52, 211, 153, 0.15);
-  --accent-amber: #fbbf24;
-  --accent-amber-glow: rgba(251, 191, 36, 0.15);
-  --accent-rose: #fb7185;
-  --accent-rose-glow: rgba(251, 113, 133, 0.15);
-  --accent-cyan: #22d3ee;
-  --accent-cyan-glow: rgba(34, 211, 238, 0.15);
+  /* Accent palette - SUPER VIBRANT */
+  --accent-indigo: #6366f1;
+  --accent-indigo-hover: #818cf8;
+  --accent-indigo-glow: rgba(99, 102, 241, 0.3);
+  --accent-violet: #8b5cf6;
+  --accent-emerald: #10b981;
+  --accent-emerald-glow: rgba(16, 185, 129, 0.3);
+  --accent-amber: #f59e0b;
+  --accent-amber-glow: rgba(245, 158, 11, 0.3);
+  --accent-rose: #f43f5e;
+  --accent-rose-glow: rgba(244, 63, 94, 0.3);
+  --accent-cyan: #06b6d4;
+  --accent-cyan-glow: rgba(6, 182, 212, 0.3);
+  --accent-pink: #ec4899;
 
   /* Status colors */
   --status-discovered: #818cf8;
-  --status-researching: #fbbf24;
-  --status-analyzed: #22d3ee;
-  --status-qualified: #34d399;
-  --status-rejected: #fb7185;
+  --status-researching: #f59e0b;
+  --status-analyzed: #06b6d4;
+  --status-qualified: #10b981;
+  --status-rejected: #f43f5e;
 
   /* Borders */
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.15);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.15);
+  --border-strong: rgba(255, 255, 255, 0.25);
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-glow-indigo: 0 0 20px rgba(129, 140, 248, 0.15);
-  --shadow-glow-emerald: 0 0 20px rgba(52, 211, 153, 0.15);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.6);
+  --shadow-glow-indigo: 0 0 25px rgba(99, 102, 241, 0.4);
+  --shadow-glow-emerald: 0 0 25px rgba(16, 185, 129, 0.4);
 
   /* Spacing */
   --space-xs: 4px;
@@ -72,10 +73,10 @@
   --space-3xl: 64px;
 
   /* Radii */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
   --radius-full: 9999px;
 
   /* Typography */
@@ -107,6 +108,11 @@ html {
 body {
   font-family: var(--font-body);
   background: var(--bg-primary);
+  background-image: 
+    radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.12), transparent 40%),
+    radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.12), transparent 40%),
+    radial-gradient(circle at 50% 80%, rgba(236, 72, 153, 0.08), transparent 40%);
+  background-attachment: fixed;
   color: var(--text-primary);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -1985,5 +1991,27 @@ textarea.input {
   height: 1px;
   background: var(--border-subtle);
   margin: var(--space-sm) 0;
+}
+
+/* ---- Region Scan ---- */
+.scan-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  animation: scanPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes scanPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.4);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.2);
+    box-shadow: 0 0 0 8px rgba(34, 211, 238, 0);
+  }
 }
 

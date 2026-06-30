@@ -45,6 +45,19 @@ export async function createBrand(formData: FormData) {
   }
 }
 
+export async function updateBrandFinancials(brandId: string, pipelineData: string) {
+  try {
+    await prisma.brand.update({
+      where: { id: brandId },
+      data: { pipelineData },
+    });
+    revalidatePath(`/brands/${brandId}`);
+    return { success: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update financials' };
+  }
+}
+
 export async function updateBrandStatus(brandId: string, status: string) {
   try {
     await prisma.brand.update({
@@ -128,6 +141,19 @@ export async function deleteBrand(brandId: string) {
   }
 }
 
+export async function deleteBrands(brandIds: string[]) {
+  try {
+    await prisma.brand.deleteMany({
+      where: { id: { in: brandIds } },
+    });
+    revalidatePath('/');
+    revalidatePath('/brands');
+    return { success: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to delete brands' };
+  }
+}
+
 export async function getBrands(filters?: {
   status?: string;
   region?: string;
@@ -177,7 +203,10 @@ export async function getBrand(id: string) {
     where: { id },
     include: {
       products: { orderBy: { confidence: 'desc' } },
-      contacts: { orderBy: { confidenceScore: 'desc' } },
+      contacts: { 
+        orderBy: { confidenceScore: 'desc' },
+        include: { outreachStrategy: true }
+      },
       aiAnalyses: { orderBy: { createdAt: 'desc' } },
       notes: { orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }] },
       scrapeLogs: { orderBy: { scrapedAt: 'desc' }, take: 10 },
@@ -261,5 +290,21 @@ export async function importApolloCsv(brandId: string, csvText: string) {
   } catch (error: any) {
     console.error('Failed to parse Apollo CSV:', error);
     return { success: false, error: error.message };
+  }
+}
+
+export async function deleteContact(contactId: string) {
+  try {
+    const contact = await prisma.contact.findUnique({ where: { id: contactId } });
+    if (!contact) return { error: 'Contact not found' };
+
+    await prisma.contact.delete({
+      where: { id: contactId }
+    });
+
+    revalidatePath(`/brands/${contact.brandId}`);
+    return { success: true };
+  } catch (error) {
+    return { error: 'Failed to delete contact' };
   }
 }

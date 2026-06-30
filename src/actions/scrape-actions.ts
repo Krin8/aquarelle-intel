@@ -3,10 +3,13 @@
 import prisma from '@/lib/db';
 import { scrapeUrl } from '@/lib/scraper';
 import { scoreConfidence, getContactConfidence } from '@/lib/normalizer/confidence-scorer';
-import { extractContacts } from '@/lib/ai/analyzers/contact-extractor';
+import { extractContacts, findContactsFromKnowledge } from '@/lib/ai/analyzers/contact-extractor';
+import { extractCompanyOverview } from '@/lib/ai/analyzers/company-overview-extractor';
+import { findDomainAndPatternWithHunter, findDomainPatternWithHunter, findRobustDomainPattern, generateEmail, deriveEmailPattern } from '@/lib/normalizer/email-pattern';
 import { revalidatePath } from 'next/cache';
 
-export async function scrapeBrand(brandId: string, options?: { useDataProvider?: boolean; useLinkedin?: boolean }) {
+
+export async function scrapeBrand(brandId: string, options?: { useDataProvider?: boolean; useLinkedin?: boolean; target?: 'all' | 'contacts' | 'overview' | 'images' }) {
   const brand = await prisma.brand.findUnique({ where: { id: brandId } });
   if (!brand) return { error: 'Brand not found' };
 
@@ -27,8 +30,13 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
       data: { status: 'researching' },
     });
 
-    // 2) Find Corporate URL if it doesn't exist yet
+    setTimeout(async () => {
+      console.log(`[Scrape] Background task started for ${brand.name} via setTimeout`);
+      try {
+        // 2) Find Corporate URL if it doesn't exist yet (skip for images-only)
+    const target = options?.target || 'all';
     let corporateUrl = brand.corporateUrl;
+    if (target !== 'images') {
     if (!corporateUrl) {
       console.log(`[Scrape] Discovering corporate URL for ${brand.name}...`);
       const { findCorporateUrl } = await import('@/lib/scraper/corporate-finder');
@@ -63,9 +71,12 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
         console.log(`[Scrape] No LinkedIn URL found.`);
       }
     }
+    } // end skip for images-only
 
     // 3) Start the scraping process on the main retail URL + corporate URL
-    const result = await scrapeUrl(brand.website, corporateUrl ?? undefined);
+    // For images-only scraping, skip corporate URL — we want images from the actual retail site
+    const corpUrlForScrape = target === 'images' ? undefined : (corporateUrl ?? undefined);
+    const result = await scrapeUrl(brand.website, corpUrlForScrape, target);
 
     // Create scrape log with full scraped data
     await prisma.scrapeLog.create({
@@ -85,6 +96,7 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
           headings: result.content.headings.slice(0, 20),
           linkCount: result.content.links.length,
           imageCount: result.content.images.length,
+          images: result.content.images.slice(0, 50),
         }) : null,
       },
     });
@@ -105,32 +117,114 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
     const now = new Date();
     const scores = scoreConfidence(content, now);
 
-    // Delete old website-sourced contacts and documents before re-extracting
+    // Delete old website-sourced and AI-sourced contacts before re-extracting
     // This ensures stale data doesn't persist across rescrapes
     await prisma.contact.deleteMany({
-      where: { brandId, source: 'website' },
+      where: { 
+        brandId, 
+        source: { in: ['website', 'google_ai_sge'] } 
+      },
     });
     
     await prisma.document.deleteMany({
       where: { brandId },
     });
 
+    if (target === 'all' || target === 'contacts') {
     // AI Contact Extraction
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let aiContacts: any[] = [];
     try {
-      console.log(`[Scrape] Running AI contact extraction for ${brand.name}...`);
-      const { result } = await extractContacts(content.markdown, brand.name);
-      aiContacts = result.contacts || [];
-      console.log(`[Scrape] AI extracted ${aiContacts.length} contacts`);
+      if (content.markdown && content.markdown.trim().length > 100) {
+        console.log(`[Scrape] Analyzing website content with AI for ${brand.name}...`);
+        const aiResult = await extractContacts(content.markdown, brand.name);
+        if (aiResult && aiResult.contacts) {
+          aiContacts = aiResult.contacts.map(c => ({ ...c, _source: 'website' }));
+          console.log(`[Scrape] AI extracted ${aiContacts.length} contacts from website`);
+        }
+      }
+
+      if (aiContacts.length === 0) {
+        console.log(`[Scrape] No contacts found on website, falling back to Gemini's internal knowledge base...`);
+        const kbResult = await findContactsFromKnowledge(brand.name);
+        if (kbResult && kbResult.contacts) {
+          aiContacts = kbResult.contacts.map(c => ({ ...c, _source: 'google_ai_sge' }));
+          console.log(`[Scrape] AI knowledge base extracted ${aiContacts.length} contacts`);
+        }
+      }
     } catch (e) {
       console.warn('[Scrape] AI contact extraction failed:', e instanceof Error ? e.message : e);
     }
 
+      // Verify missing emails using Hunter.io email-finder endpoint
+      if (aiContacts.length > 0) {
+        const candidateDomains = [];
+        if (brand.website) {
+          const cleanDomain = brand.website.replace(/^https?:\/\/(www\.)?/, '').replace(/^www\./, '').split('/')[0].toLowerCase();
+          candidateDomains.push(cleanDomain);
+          
+          const parts = cleanDomain.split('.');
+          if (parts.length > 2) {
+            // e.g. global.llbean.com -> llbean.com
+            const rootDomain = parts.slice(-2).join('.');
+            if (!candidateDomains.includes(rootDomain)) candidateDomains.push(rootDomain);
+          }
+        }
+        
+        let hunterDomain = '';
+        let hunterPattern = 'unknown';
+
+        // Try to derive the pattern for each candidate domain. 
+        for (const domain of candidateDomains) {
+          console.log(`[Scrape] Testing domain candidate: ${domain}`);
+          let hRes = await findDomainAndPatternWithHunter(domain);
+          let hPattern = hRes ? hRes.pattern : null;
+          
+          // Grab up to 3 valid persons as samples
+          const samplePersons = [];
+          for (const c of aiContacts) {
+            if (c.name && samplePersons.length < 3) {
+              const parts = c.name.trim().split(' ');
+              if (parts.length >= 2) samplePersons.push({ name: c.name, firstName: parts[0], lastName: parts.slice(1).join(' ') });
+            }
+          }
+
+          const { pattern: derivedPattern, domain: verifiedDomain } = await findRobustDomainPattern(domain, samplePersons);
+          
+          // If we got a robust pattern (not unknown, and not the bad {first} fallback)
+          if (derivedPattern !== 'unknown' && derivedPattern !== '{first}') {
+            hunterDomain = verifiedDomain || domain;
+            hunterPattern = derivedPattern;
+            console.log(`[Scrape] Successfully locked domain ${domain} with robust pattern ${derivedPattern}`);
+            break; // Stop testing other domains, we found a winner!
+          } else if (hPattern && hPattern !== 'unknown' && hPattern !== '{first}' && hunterPattern === 'unknown') {
+            // Keep this as a fallback if the robust check completely failed across all domains
+            hunterDomain = domain;
+            hunterPattern = hPattern;
+          }
+        }
+
+        if (hunterPattern !== 'unknown' && hunterDomain) {
+          console.log(`[Scrape] Found pattern '${hunterPattern}' for domain ${hunterDomain}`);
+          for (const c of aiContacts) {
+            if (!c.email && c.name) {
+               const nameParts = c.name.trim().split(/\s+/);
+               if (nameParts.length >= 2) {
+                 const genEmail = generateEmail(nameParts[0], nameParts[nameParts.length - 1], hunterDomain, hunterPattern);
+                 if (genEmail) {
+                    c.email = genEmail;
+                    console.log(`[Scrape] Generated email for ${c.name}: ${c.email}`);
+                 }
+               }
+            }
+          }
+        }
+      }
+
     // Save AI Contacts (fresh insert since we cleared old ones)
     let savedContactCount = 0;
     for (const c of aiContacts) {
-      if (!c.email && !c.phone && !c.linkedinUrl) continue;
+      if (!c.name) continue;
 
       const emailToUse = c.email || undefined;
 
@@ -152,7 +246,7 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
           email: emailToUse,
           phone: c.phone || null,
           buyerType: c.buyerType,
-          source: 'website',
+          source: c._source || 'website',
           confidenceScore: getContactConfidence({
             name: c.name,
             role: c.role,
@@ -253,7 +347,9 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
     if (optInContactCount > 0) {
       console.log(`[Scrape] Saved ${optInContactCount} opt-in contacts`);
     }
+    }
 
+    if (target === 'all' || target === 'overview') {
     // Save Scraped Documents
     let savedDocumentCount = 0;
     if (content.extractedDocuments) {
@@ -270,6 +366,45 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
       }
     }
     console.log(`[Scrape] Saved ${savedDocumentCount} documents`);
+    }
+
+    // Save Scraped Products (works for both 'all' and 'images' targets)
+    let savedProductCount = 0;
+    if (content.extractedProducts && content.extractedProducts.length > 0) {
+      // Clear old products to avoid duplicates on re-scrape
+      await prisma.product.deleteMany({
+        where: { brandId }
+      });
+      
+      for (const prod of content.extractedProducts) {
+        if (!prod.imageUrl || !prod.sourceUrl) continue; // skip broken products
+        await prisma.product.create({
+          data: {
+            brandId,
+            name: prod.name || 'Unknown Product',
+            priceMin: prod.priceMin || null,
+            imageUrl: prod.imageUrl || null,
+            sourceUrl: prod.sourceUrl || null,
+            category: prod.category || null,
+          },
+        });
+        savedProductCount++;
+      }
+    }
+    console.log(`[Scrape] Saved ${savedProductCount} products`);
+
+    // Extract Company Overview
+    let overviewData: any = {};
+    if (target === 'overview' || target === 'all') {
+      console.log(`[Scrape] Running AI Company Overview extraction for ${brand.name}...`);
+      const overviewResult = await extractCompanyOverview(brand.name, '', content.markdown, brand.region);
+      if (overviewResult) {
+        overviewData = overviewResult;
+        console.log(`[Scrape] AI extracted company overview successfully.`);
+      } else {
+        console.warn('[Scrape] AI company overview extraction failed.');
+      }
+    }
 
     // Update brand with fresh scraped data and set status to "analyzed"
     await prisma.brand.update({
@@ -279,8 +414,10 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
         dataFreshness: scores.overall,
         status: 'analyzed',
         description: content.metaDescription || content.headings[0] || brand.description,
+        ...overviewData,
       },
     });
+
 
 
     revalidatePath(`/brands/${brandId}`);
@@ -317,9 +454,29 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
       },
     });
 
-    revalidatePath(`/brands/${brandId}`);
-    return { error: error instanceof Error ? error.message : 'Scraping failed' };
+    try {
+      revalidatePath(`/brands/${brandId}`);
+    } catch (e) {
+      // Ignore if revalidatePath fails in background context
+    }
+    }
+    }, 100);
+
+    return { success: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to start scrape' };
   }
+}
+
+/**
+ * Lightweight status check for polling from the client during background scrapes.
+ */
+export async function getBrandStatus(brandId: string): Promise<{ status: string }> {
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId },
+    select: { status: true },
+  });
+  return { status: brand?.status || 'unknown' };
 }
 
 /**
@@ -387,4 +544,93 @@ export async function bulkScrapeBrands() {
   })();
 
   return { success: true };
+}
+
+export async function generateMoreContacts(brandId: string) {
+  const brand = await prisma.brand.findUnique({ 
+    where: { id: brandId },
+    include: { contacts: true }
+  });
+  if (!brand) return { error: 'Brand not found' };
+
+  try {
+    const existingNames = brand.contacts.map((c: any) => c.name).filter(Boolean);
+    const { findContactsFromKnowledge } = await import('@/lib/ai/analyzers/contact-extractor');
+    const { contacts: newAiContacts } = await findContactsFromKnowledge(brand.name, existingNames);
+    
+    if (!newAiContacts || newAiContacts.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    const candidateDomains: string[] = [];
+    if (brand.website) {
+      const cleanDomain = brand.website.replace(/^https?:\/\/(www\.)?/, '').replace(/^www\./, '').split('/')[0].toLowerCase();
+      candidateDomains.push(cleanDomain);
+      const parts = cleanDomain.split('.');
+      if (parts.length > 2) {
+        const rootDomain = parts.slice(-2).join('.');
+        if (!candidateDomains.includes(rootDomain)) candidateDomains.push(rootDomain);
+      }
+    }
+    
+    let hunterDomain = '';
+    let hunterPattern = '';
+    const samplePersons = [];
+    for (const c of newAiContacts) {
+      if (c.name && samplePersons.length < 3) {
+        const parts = c.name.trim().split(/\s+/);
+        if (parts.length >= 2) samplePersons.push({ name: c.name, firstName: parts[0], lastName: parts.slice(1).join(' ') });
+      }
+    }
+    for (const domain of candidateDomains) {
+      const { pattern, domain: verifiedDomain } = await findRobustDomainPattern(domain, samplePersons);
+      if (pattern !== 'unknown' && pattern !== '{first}') {
+        hunterDomain = verifiedDomain || domain;
+        hunterPattern = pattern;
+        break;
+      }
+    }
+    
+    if (hunterPattern !== 'unknown' && hunterDomain) {
+      for (const c of newAiContacts) {
+        if (!c.email && c.name) {
+           const nameParts = c.name.trim().split(/\s+/);
+           if (nameParts.length >= 2) {
+             const genEmail = generateEmail(nameParts[0], nameParts[nameParts.length - 1], hunterDomain, hunterPattern);
+             if (genEmail) {
+                c.email = genEmail;
+             }
+           }
+        }
+      }
+    }
+    
+    let savedCount = 0;
+    for (const c of newAiContacts) {
+      if (!c.name) continue;
+      
+      await prisma.contact.create({
+        data: {
+          brandId,
+          name: c.name,
+          role: c.role || null,
+          department: c.department || null,
+          seniority: c.seniority || null,
+          email: c.email || undefined,
+          phone: c.phone || undefined,
+          linkedinUrl: c.linkedinUrl || undefined,
+          buyerType: c.buyerType as any || 'unknown',
+          source: 'google_ai_sge',
+          confidenceScore: getContactConfidence(c)
+        }
+      });
+      savedCount++;
+    }
+    
+    revalidatePath(`/brands/${brandId}`);
+    return { success: true, count: savedCount };
+  } catch (e: any) {
+    console.error('[generateMoreContacts] Error:', e);
+    return { error: e.message || 'Failed to generate more contacts' };
+  }
 }

@@ -9,8 +9,9 @@ puppeteer.use(StealthPlugin());
 export async function scrapeLinkedinEmployees(brandName: string, website: string): Promise<{ success: boolean; contacts: ScrapedContact[]; error?: string }> {
   let browser;
   try {
-    browser = await puppeteer.launch({ 
+    browser = await puppeteer.launch({
       headless: true,
+      userDataDir: './.puppeteer_data',
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
     
@@ -27,21 +28,18 @@ export async function scrapeLinkedinEmployees(brandName: string, website: string
 
     const page = await browser.newPage();
     
-    console.log(`[LinkedIn] Using DuckDuckGo SERP for employee search...`);
+    console.log(`[LinkedIn] Using DuckDuckGo Search API for employee search...`);
     // Search for decision makers working at this company on LinkedIn
-    const query = encodeURIComponent(`site:linkedin.com/in "${brandName}" OR ${retailHostname}`);
-    await page.goto(`https://duckduckgo.com/?q=${query}&t=h_&ia=web`, { waitUntil: 'networkidle2', timeout: 15000 });
+    const query = `site:linkedin.com/in "${brandName}" OR ${retailHostname}`;
+    const { runDuckDuckGoSearch } = await import('./ddg-search');
     
-    await page.waitForSelector('[data-testid="result"]', { timeout: 10000 }).catch(() => null);
+    const ddgResults = await runDuckDuckGoSearch(query);
     
-    const searchResults = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('[data-testid="result"]')).slice(0, 10).map((el: any) => {
-        const title = el.querySelector('h2')?.innerText || '';
-        const url = el.querySelector('a')?.href || '';
-        const snippet = el.innerText || '';
-        return { title, url, snippet };
-      });
-    });
+    const searchResults = ddgResults.map(r => ({
+      title: r.title,
+      snippet: r.snippet,
+      url: r.url
+    }));
 
     await browser.close();
 
@@ -49,82 +47,168 @@ export async function scrapeLinkedinEmployees(brandName: string, website: string
        return { success: false, contacts: [], error: 'No LinkedIn employee data found.' };
     }
 
-  const prompt = `
-Brand: ${brandName}
-Website Domain: ${retailHostname || website}
+  const systemPrompt = `You are a precise B2B research assistant. You extract facts ONLY from the text given to you — you never invent names, titles, locations, or context not present in the source. The ONE exception is corporate email addresses, which you are explicitly asked to construct using a stated pattern — that is a deliberate guess, not an extraction, and you should treat it differently from every other field.`;
+
+const prompt = `Brand: ${brandName}
+Corporate email domain to use for guessing (NOT necessarily the retail/storefront domain): ${retailHostname || website}
 
 LinkedIn Search Results:
 ${JSON.stringify(searchResults, null, 2)}
 
-Analyze these LinkedIn profile search results. Extract the identities of people who currently work at ${brandName}.
-STRICT FILTER: ONLY include decision makers relevant for a B2B sourcing/manufacturing deal (e.g., Sourcing Director, Sourcing Manager, Buying Manager, Product Development Manager, Technical Manager, Sustainability Team, Country/Regional Sourcing Head, VP of Supply Chain, Founder).
-Do NOT include store associates, interns, or unrelated roles.
+TASK: From the search snippets above, extract people who appear to CURRENTLY work at ${brandName} in a B2B sourcing/manufacturing/supply-chain decision-making role.
 
-For each valid contact, extract their full name, job title, and their LinkedIn URL.
-If the snippet mentions their location, extract it into 'officeLocation'. If it mentions who they report to or their seniority context, extract it to 'reportingStructure'.
-CRITICAL: You must mathematically GUESS their corporate email address based on the brand's domain (e.g., firstname@domain.com, first.last@domain.com).
+STEP 1 — ROLE FILTER (apply strictly):
 
-Respond in JSON format: 
-{ 
+INCLUDE roles like:
+- Sourcing Director / Sourcing Manager / Buying Manager / Merchandiser
+- Product Development Manager / Technical Manager / Quality Manager
+- Sustainability Manager / Sustainability Team lead
+- Country or Regional Sourcing Head
+- VP of Supply Chain / VP of Operations / Head of Procurement
+- Founder / Co-Founder / Owner (any title, since they are always a relevant decision maker)
+
+EXCLUDE roles like:
+- Store Associate, Sales Associate, Cashier, Retail Staff
+- Intern, Working Student, Trainee
+- Marketing, PR, Social Media, Customer Service roles (unrelated to sourcing/manufacturing)
+- Anyone whose title is unclear, generic ("Employee", "Team Member"), or not given at all
+
+STEP 2 — CURRENCY CHECK:
+- Only include a person if the snippet indicates this is their CURRENT role. If the snippet says "Former", "Ex-", "previously", or shows a past date range, EXCLUDE them.
+- If currency is ambiguous, include them but do not state certainty in reportingStructure.
+
+STEP 3 — EXTRACTION (for these fields, ONLY use what is explicitly in the text — never infer or guess):
+- name: full name exactly as written
+- role: title exactly as written
+- linkedinUrl: must be copied verbatim from the search results, never modified or invented
+- officeLocation: only if explicitly mentioned in the snippet; otherwise omit the field entirely (do not write "Unknown" or guess a likely city)
+- reportingStructure: only if the snippet explicitly mentions seniority/reporting context; otherwise omit the field entirely
+
+STEP 4 — EMAIL GUESS (this field is different — you ARE expected to construct it, not extract it):
+- Take the person's name and the domain given above.
+- Build the email using this pattern, in priority order — use the FIRST one that makes sense, and use the SAME pattern for every person in this response for consistency: 
+  1. firstname.lastname@domain (e.g. jane.doe@acme.com)
+- Normalize: lowercase, strip spaces/accents/special characters, use only the first and last name (ignore middle names/initials).
+- This is always a guess. Do not skip it just because you're unsure — always produce your best-guess email using the pattern above.
+
+OUTPUT — respond with ONLY this JSON shape, no markdown fences, no preamble:
+{
   "contacts": [
-    { 
-      "name": "Jane Doe", 
-      "role": "Sourcing Manager", 
-      "email": "jane.doe@example.com",
+    {
+      "name": "Jane Doe",
+      "role": "Sourcing Manager",
       "linkedinUrl": "https://linkedin.com/in/janedoe",
       "officeLocation": "New York, NY",
-      "reportingStructure": "Reports to VP of Supply Chain"
+      "reportingStructure": "Reports to VP of Supply Chain",
+      "email": "jane.doe@example.com"
     }
-  ] 
+  ]
 }
-`;
 
-    const { result } = await generateStructuredResponse<{ contacts: { name: string; role: string; email: string; linkedinUrl: string; officeLocation?: string; reportingStructure?: string }[] }>(
-      "You are an expert corporate researcher extracting B2B decision makers from LinkedIn search snippets and estimating their corporate email addresses.",
+If no one in the results passes the role filter and currency check, return {"contacts": []}.
+Otherwise, extract as many valid contacts as possible up to a maximum cap of 15-20. If you can only find 7, that is perfectly fine, just ensure you extract at least 5 if they exist.
+
+EXAMPLE:
+Input snippet: "Jane Doe - Sourcing Manager at Acme Corp. New York, NY. Reports to VP of Supply Chain. 500+ connections."
+Other snippet: "John Smith - Former Sourcing Director at Acme Corp (2018-2021)."
+Other snippet: "Mary Lee - Store Associate at Acme Corp."
+
+Correct output:
+{"contacts": [{"name": "Jane Doe", "role": "Sourcing Manager", "linkedinUrl": "https://linkedin.com/in/janedoe", "officeLocation": "New York, NY", "reportingStructure": "Reports to VP of Supply Chain", "email": "jane.doe@example.com"}]}
+(John Smith excluded — former role. Mary Lee excluded — unrelated role.)
+
+Now extract from the actual search results above and respond with the JSON only.`;
+
+    const { result } = await generateStructuredResponse<{
+      contacts: { name: string; role: string; email: string; linkedinUrl: string; officeLocation?: string; reportingStructure?: string }[]
+    }>(
+      systemPrompt,
       prompt,
-      (text) => JSON.parse(text)
+      (text) => {
+        const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+        return JSON.parse(cleaned);
+      }
     );
 
-    const extractedContacts: ScrapedContact[] = await Promise.all((result.contacts || []).map(async (c) => {
-      let confidence = 70; // Confidence lowered slightly because emails are guessed
-      let source_url = c.linkedinUrl || 'linkedin';
+    const domain = (retailHostname || website || '').replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '');
+    const allResultUrls = searchResults.map((r: any) => r.url ?? r);
 
-      // Verify email with Hunter.io if API key is present
-      if (c.email && process.env.HUNTER_API_KEY) {
-        try {
-          const res = await fetch(`https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(c.email)}&api_key=${process.env.HUNTER_API_KEY}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.data?.status === 'valid') {
-              confidence = 95;
-              source_url = 'hunter_verified';
-            } else if (data?.data?.status === 'invalid') {
-              // We could remove it, but let's keep it with a very low confidence
-              confidence = 30;
-            }
-          }
-        } catch (e) {
-          console.error('[Hunter.io] Failed to verify email:', e);
+    const dedupedByLinkedinUrl = new Map<string, typeof result.contacts[number]>();
+
+    for (const c of (result.contacts || [])) {
+      if (!c.name || !c.linkedinUrl) continue;
+
+      // Anti-hallucination guard: LinkedIn URL must exist verbatim in search results
+      const normalize = (s: string) => s.replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/^www\./, '');
+      const urlExisted = allResultUrls.some((u: string) => u && normalize(u) === normalize(c.linkedinUrl));
+      if (!urlExisted) {
+        console.warn(`Discarding contact with hallucinated LinkedIn URL: ${c.name} — ${c.linkedinUrl}`);
+        continue;
+      }
+
+      // Validate the guessed email actually uses the expected domain —
+      // catches cases where the model invented a different domain
+      let email: string | undefined = c.email;
+      if (email && domain && !email.toLowerCase().endsWith('@' + domain.toLowerCase())) {
+        console.warn(`Email domain mismatch for ${c.name}, rebuilding from name + known domain`);
+        const parts = c.name.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        if (parts.length >= 2 && domain) {
+          const first = parts[0].replace(/[^a-z]/g, '');
+          const last = parts[parts.length - 1].replace(/[^a-z]/g, '');
+          email = `${first}.${last}@${domain}`;
+        } else {
+          email = undefined;
         }
       }
 
-      return {
-        name: c.name,
-        role: c.role,
-        email: c.email,
-        confidence,
-        source_url, 
-        type: 'direct',
-        officeLocation: c.officeLocation,
-        reportingStructure: c.reportingStructure
-      } as any;
-    }));
+      // Dedup by LinkedIn URL, keeping the entry with more fields populated
+      const existing = dedupedByLinkedinUrl.get(c.linkedinUrl);
+      if (!existing || Object.keys(c).length > Object.keys(existing).length) {
+        dedupedByLinkedinUrl.set(c.linkedinUrl, { ...c, email: email || '' });
+      }
+    }
+
+    const extractedContacts: ScrapedContact[] = await Promise.all(
+      Array.from(dedupedByLinkedinUrl.values()).map(async (c) => {
+        let confidence = 70; // lowered because email is always a guess
+        let source_url = c.linkedinUrl || 'linkedin';
+
+        if (c.email && process.env.HUNTER_API_KEY) {
+          try {
+            const res = await fetch(`https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(c.email)}&api_key=${process.env.HUNTER_API_KEY}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.data?.status === 'valid') {
+                confidence = 95;
+                source_url = 'hunter_verified';
+              } else if (data?.data?.status === 'invalid') {
+                confidence = 30;
+              }
+            }
+          } catch (e) {
+            console.error('[Hunter.io] Failed to verify email:', e);
+          }
+        }
+
+        return {
+          name: c.name,
+          role: c.role,
+          email: c.email,
+          confidence,
+          source_url,
+          type: 'direct',
+          officeLocation: c.officeLocation,
+          reportingStructure: c.reportingStructure
+        } as any;
+      })
+    );
 
     return { success: true, contacts: extractedContacts };
 
   } catch (error) {
     console.error('Failed to scrape LinkedIn employees:', error);
-    if (browser) await browser.close().catch(() => {});
     return { success: false, contacts: [], error: error instanceof Error ? error.message : 'LinkedIn employee scrape failed' };
+  } finally {
+    if (browser) await browser.close().catch(() => {});
   }
 }
