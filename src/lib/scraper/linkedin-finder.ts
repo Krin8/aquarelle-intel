@@ -46,7 +46,10 @@ export async function findLinkedinUrl(brandName: string, retailUrl: string, mode
 
     await browser.close();
 
-    if (searchResults.length === 0) return null;
+    if (searchResults.length === 0) {
+      console.log(`[Scrape] Puppeteer search returned 0 results. Falling back to Gemini Search...`);
+      return fallbackToGeminiSearch(brandName, retailUrl, modelPref);
+    }
 
     const systemPrompt = `You are a strict URL classifier. Your only job is to pick ONE url from a list of search results, or return null. You never invent URLs — you only select from what is given.`;
 
@@ -110,8 +113,8 @@ Now respond with the JSON only.`;
     // Structural guard: must actually be a /company/ page, not /in/, /showcase/, /jobs/, etc.
     const isCompanyPage = /linkedin\.com\/company\//i.test(finalUrl);
     if (!isCompanyPage) {
-      console.warn(`Model returned a non-company LinkedIn URL, discarding: ${finalUrl}`);
-      return null;
+      console.warn(`Model returned a non-company LinkedIn URL, discarding: ${finalUrl}. Falling back to Gemini Search...`);
+      return fallbackToGeminiSearch(brandName, retailUrl, modelPref);
     }
 
     return finalUrl;
@@ -119,6 +122,36 @@ Now respond with the JSON only.`;
   } catch (error) {
     console.error('Failed to find LinkedIn URL via AI:', error);
     if (browser) await browser.close().catch(() => {});
-    return null;
+    return fallbackToGeminiSearch(brandName, retailUrl, modelPref);
   }
+}
+
+async function fallbackToGeminiSearch(brandName: string, retailUrl: string, modelPref?: 'ollama' | 'gemini'): Promise<string | null> {
+  console.log(`[Scrape] Executing Gemini Google Search for LinkedIn URL: ${brandName}`);
+  try {
+    const systemPrompt = `You are a strict URL finder. Your job is to find the official LinkedIn company page URL for a brand using Google Search.`;
+    const prompt = `Brand: ${brandName}\nRetail URL: ${retailUrl}\nFind the exact official LinkedIn company page. It MUST start with https://www.linkedin.com/company/...\nRespond with ONLY a JSON object: {"bestUrl": "<url>"} or {"bestUrl": null} if you cannot confidently find it.`;
+
+    const { result } = await generateStructuredResponse<{ bestUrl: string | null }>(
+      systemPrompt,
+      prompt,
+      (text) => {
+        try {
+          const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+          return JSON.parse(cleaned);
+        } catch {
+          return { bestUrl: null };
+        }
+      },
+      modelPref,
+      true
+    );
+
+    if (result?.bestUrl && /linkedin\.com\/company\//i.test(result.bestUrl)) {
+      return result.bestUrl.trim();
+    }
+  } catch (e) {
+    console.warn('[Scrape] Gemini search fallback failed:', e);
+  }
+  return null;
 }

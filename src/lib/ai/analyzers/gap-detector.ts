@@ -5,7 +5,7 @@ import { getAquarelleContextString } from '../../knowledge/aquarelle-kb';
 
 const aquarelleCtx = getAquarelleContextString();
 
-const SYSTEM_PROMPT = `You are a strategic business analyst at Aquarelle, a shirts manufacturing division within CIEL Textile (Mauritius-based textile group).
+const SYSTEM_PROMPT = `You are a strategic business analyst at Aquarelle, a shirts manufacturing division within CIEL Textile.
 
 ${aquarelleCtx}
 
@@ -81,6 +81,7 @@ export async function detectGaps(
 ${financialContext}
 
 Brand: ${brandName}
+Relationship Type: ${customerType.toUpperCase()} (${customerType === 'existing' ? 'Already an Aquarelle customer' : customerType === 'pipeline' ? 'Active prospect in our sales pipeline' : 'No prior relationship with Aquarelle'})
 
 Brand Analysis:
 ${brandAnalysis}

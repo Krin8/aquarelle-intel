@@ -240,7 +240,7 @@ ${getAquarelleContextString()}
 RULES:
 1. Only extract REAL brand companies — not directories, news articles, blog posts, or marketplace listings.
 2. The URL must be the brand's official website (not social media, not a third-party directory).
-3. Focus on brands that could potentially need shirt manufacturing services: casual wear, denim, fashion shirts, sportswear shirts, casual-luxury brands.
+3. Focus on brands that could potentially need shirt manufacturing services: casual wear, denim, fashion shirts, casual-luxury brands.
 4. Skip brands that are purely: footwear-only, accessories-only, luxury haute couture with in-house production, or fast-fashion giants (Zara, H&M, Shein).
 5. CRITICAL GEOGRAPHY RULE: You MUST verify the brand is originally founded, headquartered, or primarily native to the requested region. DO NOT include massive global conglomerates (like Aditya Birla, PVH, VF Corp) just because they happen to operate or were mentioned in that region.
 6. AQUARELLE MATCH RULE: STRICTLY use the Aquarelle Knowledge Base provided above. ONLY return brands that are HIGHLY RELATED to Aquarelle's capabilities and represent a strong B2B business opportunity (i.e. they sell products heavily overlapping with our Product Portfolio and Fabric Expertise). If a brand does not sell products we can manufacture, DO NOT include them.

@@ -133,7 +133,7 @@ STRICT EXCLUSIONS:
 
 SENIORITY must be exactly one of: ["C-Level", "Senior Vice President", "Vice President", "Senior Director", "Director", "VP", "Head" ,"Senior Manager", "Manager", "Individual Contributor", "Unknown"]
 
-Return Full Name (name) and Job Title (role). Leave the email field blank (null) if not known. Do NOT invent email addresses.
+Return Full Name (name), Job Title (role), and LinkedIn profile URL (linkedinUrl). Leave the email field blank (null) if not known. Do NOT invent email addresses or LinkedIn URLs if they aren't publicly verified.
 
 CRITICAL: Conduct an exhaustive search for contacts across the company's official website, LinkedIn, press releases, sustainability reports, conference speaker lists, procurement documents, and other reputable public sources.
 
@@ -145,7 +145,7 @@ Do not stop searching after finding a few contacts. Continue exploring additiona
 
 Return ONLY real individuals who are CURRENTLY employed by this exact company. Do not include former employees, retired employees, contractors, advisors, board members (unless they are current executives), interns whose employment has ended, or individuals whose current employment cannot be confidently confirmed.
 
-Never fabricate, infer, estimate, or hallucinate names, titles, emails, or profiles.
+Never fabricate, infer, estimate, or hallucinate names, titles, emails, linkedin urls, or profiles.
 
 If exhaustive searching still yields fewer than 8 verified contacts, return only the verified contacts you found. If none can be verified, return 0 contacts.
 
@@ -154,10 +154,10 @@ Accuracy is mandatory. The minimum target of 8 contacts must never override fact
 CRITICAL: Respond with ONLY a valid JSON object in this exact format:
 {
   "contacts": [
-    { "name": "Jane Smith", "role": "Sourcing Manager", "seniority": "Manager" },
-    { "name": "Carlos Mendes", "role": "Buying Manager", "seniority": "Manager" },
-    { "name": "Aiko Tanaka", "role": "Sustainability Manager", "seniority": "Manager" },
-    { "name": "Robert Klein", "role": "Technical Director", "seniority": "VP/Director" }
+    { "name": "Jane Smith", "role": "Sourcing Manager", "seniority": "Manager", "linkedinUrl": "https://linkedin.com/in/janesmith" },
+    { "name": "Carlos Mendes", "role": "Buying Manager", "seniority": "Manager", "linkedinUrl": null },
+    { "name": "Aiko Tanaka", "role": "Sustainability Manager", "seniority": "Manager", "linkedinUrl": "https://linkedin.com/in/aikotanaka123" },
+    { "name": "Robert Klein", "role": "Technical Director", "seniority": "VP/Director", "linkedinUrl": null }
   ]
 }
 No markdown fences, no preamble, no summary text. If you have no knowledge of any valid contacts, respond with exactly: { "contacts": [] }. NEVER output conversational text, apologies, or caveats inside or outside the JSON.`;
@@ -192,7 +192,10 @@ Respond with the JSON only.`;
     return {
       contacts: result?.contacts || []
     };
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message === 'API_KEYS_EXHAUSTED') {
+      throw error;
+    }
     console.error(`[AI:KnowledgeContacts] Failed to find contacts for ${brandName}:`, error);
     return { contacts: [] };
   }

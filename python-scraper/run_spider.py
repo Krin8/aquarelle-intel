@@ -12,13 +12,13 @@ def main():
     url = sys.argv[1]
 
     # Set the Scrapy settings module so get_project_settings() works
-    os.environ.setdefault('SCRAPY_SETTINGS_MODULE', 'laguna_crawler.settings')
+    os.environ.setdefault('SCRAPY_SETTINGS_MODULE', 'aquarelle_crawler.settings')
 
-    # Important: In order for Scrapy to find the settings and modules, we need to add laguna_crawler to sys.path
+    # Important: In order for Scrapy to find the settings and modules, we need to add aquarelle_crawler to sys.path
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    laguna_crawler_dir = os.path.join(current_dir, 'laguna_crawler')
-    if laguna_crawler_dir not in sys.path:
-        sys.path.insert(0, laguna_crawler_dir)
+    aquarelle_crawler_dir = os.path.join(current_dir, 'aquarelle_crawler')
+    if aquarelle_crawler_dir not in sys.path:
+        sys.path.insert(0, aquarelle_crawler_dir)
     
     target_url = sys.argv[1]
     corporate_url = sys.argv[2] if len(sys.argv) > 2 else None
@@ -38,7 +38,7 @@ def main():
     process = CrawlerProcess(settings)
 
     # Import the spider directly
-    from laguna_crawler.spiders.deep_spider import DeepSpider
+    from aquarelle_crawler.spiders.deep_spider import DeepSpider
 
     # We add the spider with the URL passed in as an argument
     process.crawl(DeepSpider, target_url=target_url, corporate_url=corporate_url, scrape_target=scrape_target)

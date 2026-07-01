@@ -61,6 +61,10 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, initial
       }
     }
   }
+  const isQuota = lastError?.status === 429 || lastError?.message?.includes('429') || lastError?.status === 'RESOURCE_EXHAUSTED' || lastError?.message?.includes('quota') || lastError?.message?.includes('Quota');
+  if (isQuota) {
+    throw new Error('API_KEYS_EXHAUSTED');
+  }
   throw new Error(`Gemini API error after ${maxRetries} attempts: ${lastError?.message || lastError}`);
 }
 

@@ -693,8 +693,11 @@ export async function generateMoreContacts(brandId: string) {
     
     revalidatePath(`/brands/${brandId}`);
     return { success: true, count: savedCount };
-  } catch (e: any) {
-    console.error('[generateMoreContacts] Error:', e);
-    return { error: e.message || 'Failed to generate more contacts' };
+  } catch (error: any) {
+    if (error?.message === 'API_KEYS_EXHAUSTED') {
+      return { error: 'API_KEYS_EXHAUSTED' };
+    }
+    console.error('Failed to generate more contacts:', error);
+    return { error: 'Failed to generate contacts. Please try again.' };
   }
 }

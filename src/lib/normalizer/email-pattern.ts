@@ -1,7 +1,7 @@
 export function deriveEmailPattern(firstName: string, lastName: string, email: string): string {
   const [local] = email.toLowerCase().split('@');
-  const f = firstName.toLowerCase().replace(/[^a-z]/g, '');
-  const l = lastName.toLowerCase().replace(/[^a-z]/g, '');
+  const f = firstName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+  const l = lastName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
   const fi = f[0];
   const li = l[0];
 
@@ -27,8 +27,8 @@ export function deriveEmailPattern(firstName: string, lastName: string, email: s
 export function generateEmail(firstName: string, lastName: string, domain: string, pattern: string): string | undefined {
   if (pattern === 'unknown') return undefined;
   
-  const f = firstName.toLowerCase().replace(/[^a-z]/g, '');
-  const l = lastName.toLowerCase().replace(/[^a-z]/g, '');
+  const f = firstName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+  const l = lastName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
   
   if (!f || !l) return undefined;
   

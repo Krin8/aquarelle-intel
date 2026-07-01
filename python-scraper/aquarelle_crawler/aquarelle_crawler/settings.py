@@ -1,7 +1,7 @@
-BOT_NAME = "laguna_crawler"
+BOT_NAME = "aquarelle_crawler"
 
-SPIDER_MODULES = ["laguna_crawler.spiders"]
-NEWSPIDER_MODULE = "laguna_crawler.spiders"
+SPIDER_MODULES = ["aquarelle_crawler.spiders"]
+NEWSPIDER_MODULE = "aquarelle_crawler.spiders"
 
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = True
@@ -31,5 +31,5 @@ USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36
 
 # Configure item pipelines
 ITEM_PIPELINES = {
-    "laguna_crawler.pipelines.JsonOutputPipeline": 300,
+    "aquarelle_crawler.pipelines.JsonOutputPipeline": 300,
 }

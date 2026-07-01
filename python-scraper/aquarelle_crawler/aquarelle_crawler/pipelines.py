@@ -1,6 +1,6 @@
 import json
 from itemadapter import ItemAdapter
-from laguna_crawler.items import PageItem, ContactItem, DocumentItem, ProductItem
+from aquarelle_crawler.items import PageItem, ContactItem, DocumentItem, ProductItem
 
 class JsonOutputPipeline:
     def __init__(self):

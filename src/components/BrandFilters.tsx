@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 const STATUSES = ['all', 'discovered', 'researching', 'analyzed', 'qualified', 'rejected'];
 
@@ -18,6 +18,7 @@ export function BrandFilters({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const updateFilter = useCallback(
     (key: string, value: string) => {
@@ -27,7 +28,9 @@ export function BrandFilters({
       } else {
         params.delete(key);
       }
-      router.push(`/brands?${params.toString()}`);
+      const newUrl = `/brands?${params.toString()}`;
+      console.log('Navigating to URL:', newUrl);
+      router.replace(newUrl, { scroll: false });
     },
     [router, searchParams]
   );
@@ -41,8 +44,9 @@ export function BrandFilters({
           placeholder="Search brands..."
           defaultValue={currentSearch}
           onChange={(e) => {
-            const timeout = setTimeout(() => updateFilter('search', e.target.value), 300);
-            return () => clearTimeout(timeout);
+            const val = e.target.value;
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            timeoutRef.current = setTimeout(() => updateFilter('search', val), 300);
           }}
         />
       </div>

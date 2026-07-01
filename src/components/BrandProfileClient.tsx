@@ -66,22 +66,26 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
   const [pipelineState, setPipelineState] = useState(brand.pipelineData);
   const [isScoring, setIsScoring] = useState(false);
   const [visibleProductsCount, setVisibleProductsCount] = useState(10);
-  const [loading, setLoading] = useState('');
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [error, setError] = useState('');
 
   const handleGenerateMoreContacts = async () => {
     try {
-      setLoading('generating_contacts');
+      setLoading(prev => ({ ...prev, generating_contacts: true }));
       const res = await generateMoreContacts(brand.id);
       if (res.error) {
-        alert(res.error);
+        if (res.error === 'API_KEYS_EXHAUSTED') {
+          setShowApiKeyModal(true);
+        } else {
+          alert(res.error);
+        }
       }
       router.refresh();
     } catch (err) {
       console.error(err);
       alert('Failed to generate contacts');
     } finally {
-      setLoading('');
+      setLoading(prev => ({ ...prev, generating_contacts: false }));
     }
   };
   
@@ -184,7 +188,7 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
 
   async function handleAction(action: string) {
     setError('');
-    setLoading(action);
+    setLoading(prev => ({ ...prev, [action]: true }));
     try {
       let result;
       switch (action) {
@@ -225,12 +229,7 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
         setError(e instanceof Error ? e.message : 'Action failed');
       }
     } finally {
-      // Don't clear loading for scrape — the polling effect handles it
-      if (action !== 'scrape') {
-        setLoading('');
-      } else {
-        setLoading('');
-      }
+      setLoading(prev => ({ ...prev, [action]: false }));
     }
   }
 
@@ -349,7 +348,7 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setLoading('importing_apollo');
+    setLoading(prev => ({ ...prev, importing_apollo: true }));
     setError('');
 
     try {
@@ -363,13 +362,13 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
     } catch (err: any) {
       setError(err.message || 'Failed to read file');
     } finally {
-      setLoading('');
+      setLoading(prev => ({ ...prev, importing_apollo: false }));
       e.target.value = ''; // Reset input
     }
   }
 
   async function handlePipelineScoring() {
-    setLoading('scoring_pipeline');
+    setLoading(prev => ({ ...prev, scoring_pipeline: true }));
     setError('');
     try {
       const res = await runPipelineScoring(brand.id);
@@ -378,7 +377,7 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
     } catch (err) {
       setError('Failed to run pipeline scoring');
     }
-    setLoading('');
+    setLoading(prev => ({ ...prev, scoring_pipeline: false }));
   }
 
   async function handleAddNote(formData: FormData) {
@@ -504,9 +503,10 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
               <button
                 className="btn btn-secondary btn-sm"
                 onClick={() => handleAction('scrape')}
-                disabled={loading === 'scrape' || isScraping}
+                disabled={loading['scrape'] || isScraping}
+                title="Force a deep background re-scrape of the company domain using external data providers"
               >
-                {loading === 'scrape' || isScraping ? <><span className="spinner"></span> Scraping in background...</> : '🔍 Re-scrape'}
+                {loading['scrape'] || isScraping ? <><span className="spinner"></span> Scraping in background...</> : '🔍 Re-scrape'}
               </button>
               <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={useDataProvider} onChange={e => setUseDataProvider(e.target.checked)} />
@@ -519,26 +519,29 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
             </div>
           </div>
           <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => handleAction('analyze')}
-            disabled={loading === 'analyze'}
+            className="btn btn-secondary" 
+            onClick={() => handleAction('analyze')} 
+            disabled={loading['analyze']}
+            title="Re-run AI extraction of company overview, contacts, and capabilities"
           >
-            {loading === 'analyze' ? <><span className="spinner"></span> Analyzing...</> : '✦ Analyze'}
+            {loading['analyze'] ? <><span className="spinner"></span> Analyzing...</> : '✦ Analyze'}
           </button>
           <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => handleAction('gaps')}
-            disabled={loading === 'gaps'}
+            className="btn btn-secondary" 
+            onClick={() => handleAction('gaps')} 
+            disabled={loading['gaps']}
+            title="Run gap detection against Aquarelle capabilities"
           >
-            {loading === 'gaps' ? <><span className="spinner"></span> Detecting...</> : '◈ Gaps'}
+            {loading['gaps'] ? <><span className="spinner"></span> Detecting...</> : '◈ Gaps'}
           </button>
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
             <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => handleAction('pitch')}
-              disabled={loading === 'pitch'}
+              className="btn btn-secondary" 
+              onClick={() => handleAction('pitch')} 
+              disabled={loading['pitch']}
+              title="Generate customized pitching angles"
             >
-              {loading === 'pitch' ? <><span className="spinner"></span> Generating...</> : '📝 Pitch'}
+              {loading['pitch'] ? <><span className="spinner"></span> Generating...</> : '📝 Pitch'}
             </button>
             {pitchTemplates && pitchTemplates.length > 0 && (
               <select 
@@ -591,13 +594,12 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
           <div className="stat-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
             <span className="stat-card-label" style={{ marginBottom: '8px' }}>Pipeline Score</span>
             <button 
-              className="btn btn-secondary btn-sm" 
+              className="btn btn-sm btn-secondary"
               onClick={handlePipelineScoring}
-              disabled={loading === 'scoring_pipeline'}
-              style={{ width: '100%' }}
-              title="Estimate Pipeline Score"
+              disabled={loading['scoring_pipeline']}
+              title="Estimate win probability based on pipeline signals"
             >
-              {loading === 'scoring_pipeline' ? '⏳ Scoring...' : '🪄 Estimate Score'}
+              {loading['scoring_pipeline'] ? '⏳ Scoring...' : '🪄 Estimate Score'}
             </button>
           </div>
         )}
@@ -918,16 +920,15 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
                 )}
               </h3>
               <button 
-                className="button-secondary" 
+                className="btn btn-primary"
                 onClick={() => handleAction('financial_intelligence')} 
-                disabled={loading === 'financial_intelligence'}
-                style={{ fontSize: '12px', padding: '4px 10px' }}
+                disabled={loading['financial_intelligence']}
               >
-                {loading === 'financial_intelligence' ? 'Generating...' : '✨ Auto-Generate with AI'}
+                {loading['financial_intelligence'] ? 'Generating...' : '✨ Auto-Generate with AI'}
               </button>
             </div>
 
-            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', opacity: loading === 'financial_intelligence' ? 0.5 : 1 }}>
+            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', opacity: loading['financial_intelligence'] ? 0.5 : 1 }}>
                 <div className="stat-card">
                   <span className="stat-card-label">FOB Price</span>
                   <span className="stat-card-value" style={{ color: parsedFin.fobPrice ? 'var(--accent-emerald)' : 'var(--text-muted)' }}>
@@ -982,12 +983,12 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
       {activeTab === 'Contacts' && (
         <div className="animate-fade-in">
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-md)', gap: '8px' }}>
-            <button className="btn btn-primary btn-sm" onClick={handleGenerateMoreContacts} disabled={loading === 'generating_contacts'}>
-              {loading === 'generating_contacts' ? '⏳ Generating...' : '✨ Generate More'}
+            <button className="btn btn-primary btn-sm" onClick={handleGenerateMoreContacts} disabled={loading['generating_contacts']}>
+              {loading['generating_contacts'] ? '⏳ Generating...' : '✨ Generate More'}
             </button>
-            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-              {loading === 'importing_apollo' ? '⏳ Importing...' : '➕ Import Apollo CSV'}
-              <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleApolloImport} disabled={loading === 'importing_apollo'} />
+            <label className="btn btn-secondary btn-sm" style={{ cursor: loading['importing_apollo'] ? 'not-allowed' : 'pointer' }}>
+              {loading['importing_apollo'] ? '⏳ Importing...' : '➕ Import Apollo CSV'}
+              <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleApolloImport} disabled={loading['importing_apollo']} />
             </label>
             <a 
               href={`/api/export?brandId=${brand.id}&type=contacts`} 
@@ -1065,9 +1066,13 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
                     </div>
 
                     <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span className={`status-badge ${contact.buyerType === 'decision_maker' ? 'qualified' : contact.buyerType === 'influencer' ? 'analyzed' : 'discovered'}`}>
-                        {contact.buyerType.replace(/_/g, ' ')}
-                      </span>
+                      {contact.linkedinUrl ? (
+                        <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="filter-chip" style={{ fontSize: '11px', padding: '2px 6px', textDecoration: 'none', color: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '4px', alignSelf: 'flex-start' }}>
+                          <span style={{ color: '#0077b5', fontWeight: 'bold' }}>in</span> LinkedIn
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>—</span>
+                      )}
                       {(contact as any).officeLocation && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>📍 {(contact as any).officeLocation}</span>}
                       {(contact as any).reportingStructure && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>🔗 {(contact as any).reportingStructure}</span>}
                     </div>

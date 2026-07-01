@@ -2,7 +2,7 @@ import re
 from urllib.parse import urlparse
 from scrapy.spiders import CrawlSpider, Rule
 from scrapy.linkextractors import LinkExtractor
-from laguna_crawler.items import PageItem, ContactItem, DocumentItem, ProductItem
+from aquarelle_crawler.items import PageItem, ContactItem, DocumentItem, ProductItem
 from markdownify import markdownify as md
 import json
 import urllib.request

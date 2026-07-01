@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { getBrands } from '@/actions/brand-actions';
 import { BrandFilters } from '@/components/BrandFilters';
 import { getFreshnessLabel } from '@/lib/normalizer/confidence-scorer';
@@ -11,6 +12,7 @@ export default async function BrandsPage({
   searchParams: Promise<{ status?: string; region?: string; search?: string; minScore?: string; hasContacts?: string }>;
 }) {
   const params = await searchParams;
+  console.log('[DEBUG] BrandsPage rendering with params:', params);
   const brands = await getBrands({
     status: params.status,
     region: params.region,
@@ -38,12 +40,14 @@ export default async function BrandsPage({
         </div>
       </div>
 
-      <BrandFilters
-        currentStatus={params.status}
-        currentRegion={params.region}
-        currentSearch={params.search}
-        regions={regions}
-      />
+      <Suspense fallback={<div style={{ padding: '20px', opacity: 0.5 }}>Loading filters...</div>}>
+        <BrandFilters
+          currentStatus={params.status}
+          currentRegion={params.region}
+          currentSearch={params.search}
+          regions={regions}
+        />
+      </Suspense>
 
       {brands.length === 0 ? (
         <div className="empty-state">

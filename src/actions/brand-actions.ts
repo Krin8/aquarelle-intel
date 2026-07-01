@@ -161,6 +161,7 @@ export async function getBrands(filters?: {
   minScore?: string;
   hasContacts?: string;
 }) {
+  console.log('[DEBUG] getBrands called with filters:', filters);
   const where: any = {};
 
   if (filters?.status && filters.status !== 'all') {
