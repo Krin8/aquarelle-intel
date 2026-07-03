@@ -10,7 +10,7 @@ puppeteer.use(StealthPlugin());
  * Automatically searches for and extracts the official LinkedIn company page
  * using a hybrid Search + AI approach.
  */
-export async function findLinkedinUrl(brandName: string, retailUrl: string, modelPref?: 'ollama' | 'gemini'): Promise<string | null> {
+export async function findLinkedinUrl(brandName: string, retailUrl: string): Promise<string | null> {
   let browser;
   try {
     browser = await puppeteer.launch({
@@ -48,7 +48,7 @@ export async function findLinkedinUrl(brandName: string, retailUrl: string, mode
 
     if (searchResults.length === 0) {
       console.log(`[Scrape] Puppeteer search returned 0 results. Falling back to Gemini Search...`);
-      return fallbackToGeminiSearch(brandName, retailUrl, modelPref);
+      return fallbackToGeminiSearch(brandName, retailUrl);
     }
 
     const systemPrompt = `You are a strict URL classifier. Your only job is to pick ONE url from a list of search results, or return null. You never invent URLs — you only select from what is given.`;
@@ -98,8 +98,7 @@ Now respond with the JSON only.`;
       (text) => {
         const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
         return JSON.parse(cleaned);
-      },
-      modelPref
+      }
     );
 
     if (!result?.bestUrl) return null;
@@ -114,7 +113,7 @@ Now respond with the JSON only.`;
     const isCompanyPage = /linkedin\.com\/company\//i.test(finalUrl);
     if (!isCompanyPage) {
       console.warn(`Model returned a non-company LinkedIn URL, discarding: ${finalUrl}. Falling back to Gemini Search...`);
-      return fallbackToGeminiSearch(brandName, retailUrl, modelPref);
+      return fallbackToGeminiSearch(brandName, retailUrl);
     }
 
     return finalUrl;
@@ -122,11 +121,11 @@ Now respond with the JSON only.`;
   } catch (error) {
     console.error('Failed to find LinkedIn URL via AI:', error);
     if (browser) await browser.close().catch(() => {});
-    return fallbackToGeminiSearch(brandName, retailUrl, modelPref);
+    return fallbackToGeminiSearch(brandName, retailUrl);
   }
 }
 
-async function fallbackToGeminiSearch(brandName: string, retailUrl: string, modelPref?: 'ollama' | 'gemini'): Promise<string | null> {
+async function fallbackToGeminiSearch(brandName: string, retailUrl: string): Promise<string | null> {
   console.log(`[Scrape] Executing Gemini Google Search for LinkedIn URL: ${brandName}`);
   try {
     const systemPrompt = `You are a strict URL finder. Your job is to find the official LinkedIn company page URL for a brand using Google Search.`;
@@ -143,7 +142,6 @@ async function fallbackToGeminiSearch(brandName: string, retailUrl: string, mode
           return { bestUrl: null };
         }
       },
-      modelPref,
       true
     );
 

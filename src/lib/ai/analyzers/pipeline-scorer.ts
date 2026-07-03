@@ -26,9 +26,7 @@ Always respond with valid JSON using the exact field names given in the user pro
 export async function scorePipeline(
   brandName: string,
   brandAnalysis: string,
-  gapDetection: string,
-  modelPref?: 'ollama' | 'gemini'
-): Promise<{
+  gapDetection: string): Promise<{
   scoring: PipelineScoring;
   rawResponse: string;
   model: string;
@@ -141,8 +139,7 @@ No markdown fences, no preamble. Respond with the JSON only.`;
       }
 
       return PipelineScoringSchema.parse(parsed);
-    },
-    modelPref
+    }
   );
 
   // Enforce mathematically correct gross total regardless of what the model returned

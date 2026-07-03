@@ -68,8 +68,7 @@ Return ONLY a JSON object matching this interface:
       (text: string) => {
         const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
         return JSON.parse(cleaned);
-      },
-      'gemini' // Require gemini for factual world knowledge and deep contextual understanding
+      }
     );
 
     await prisma.supplierProfile.update({

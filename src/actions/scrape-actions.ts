@@ -17,15 +17,6 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
   if (!brand) return { error: 'Brand not found' };
 
   const previousStatus = brand.status;
-  
-  let modelPref: 'ollama' | 'gemini' = 'gemini';
-  try {
-    const { getModelPreference } = await import('@/actions/settings-actions');
-    modelPref = await getModelPreference();
-  } catch (e) {
-    console.warn('Could not get model preference in scrapeBrand, defaulting to gemini');
-  }
-
   try {
     // Update status to researching
     await prisma.brand.update({
@@ -43,7 +34,7 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
     if (!corporateUrl) {
       console.log(`[Scrape] Discovering corporate URL for ${brand.name}...`);
       const { findCorporateUrl } = await import('@/lib/scraper/corporate-finder');
-      const foundUrl = await findCorporateUrl(brand.name, brand.website, modelPref);
+      const foundUrl = await findCorporateUrl(brand.name, brand.website);
       if (foundUrl) {
         corporateUrl = foundUrl;
         console.log(`[Scrape] Discovered corporate URL: ${corporateUrl}`);
@@ -62,7 +53,7 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
     if (!linkedinUrl) {
       console.log(`[Scrape] Discovering LinkedIn URL for ${brand.name}...`);
       const { findLinkedinUrl } = await import('@/lib/scraper/linkedin-finder');
-      const foundUrl = await findLinkedinUrl(brand.name, brand.website, modelPref);
+      const foundUrl = await findLinkedinUrl(brand.name, brand.website);
       if (foundUrl) {
         linkedinUrl = foundUrl;
         console.log(`[Scrape] Discovered LinkedIn URL: ${linkedinUrl}`);

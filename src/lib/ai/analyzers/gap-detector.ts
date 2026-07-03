@@ -42,9 +42,7 @@ export async function detectGaps(
   brandAnalysis: string,
   brandName: string,
   customerType: string = 'new',
-  pipelineData?: string,
-  modelPref?: 'ollama' | 'gemini'
-): Promise<{
+  pipelineData?: string): Promise<{
   detection: GapDetection;
   rawResponse: string;
   model: string;
@@ -143,11 +141,10 @@ Respond with the JSON only.`;
       }
 
       return GapDetectionSchema.parse(parsed);
-    },
-    modelPref
+    }
   );
 
-  if (hasFinancialData && modelPref === 'gemini') {
+  if (hasFinancialData) {
     console.warn('[GapDetection] Confidential financial intelligence was sent to an external model provider (Gemini). Confirm this is intended.');
   }
 

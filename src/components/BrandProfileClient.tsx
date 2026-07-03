@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ContactDetailsModal } from './ContactDetailsModal';
 import { ApiKeyModal } from './ApiKeyModal';
 import ReactMarkdown from 'react-markdown';
 import { updateBrandStatus, deleteBrand, importApolloCsv, updateBrandFinancials, clearBrandProductsAction } from '@/actions/brand-actions';
@@ -34,6 +33,7 @@ type BrandWithRelations = {
   productType: string | null;
   segment: string | null;
   priceRange: string | null;
+  pipelineData: string | null;
   description: string | null;
   matchScore: number | null;
   dataFreshness: number;
@@ -41,7 +41,7 @@ type BrandWithRelations = {
   createdAt: Date;
   complianceNotes: string | null;
   products: { id: string; name: string; category: string | null; priceMin: number | null; priceMax: number | null; confidence: number; imageUrl: string | null; sourceUrl: string | null }[];
-  contacts: { id: string; name: string; role: string | null; department: string | null; seniority: string | null; email: string | null; phone: string | null; buyerType: string; confidenceScore: number; source: string; areasOfResponsibility: string | null; yearsInRole: number | null; relevanceScore: number | null; isVerified: boolean; outreachStrategy: { whyMatters: string | null; valueProposition: string | null; recommendedPath: string | null } | null }[];
+  contacts: { id: string; name: string; role: string | null; department: string | null; seniority: string | null; email: string | null; phone: string | null; linkedinUrl: string | null; buyerType: string; confidenceScore: number; source: string; areasOfResponsibility: string | null; yearsInRole: number | null; relevanceScore: number | null; isVerified: boolean; outreachStrategy: { whyMatters: string | null; valueProposition: string | null; recommendedPath: string | null } | null }[];
   documents: { id: string; title: string; type: string; url: string; scrapedAt: Date }[];
   aiAnalyses: { id: string; analysisType: string; response: string; structuredData: string | null; modelUsed: string; feedbackRating: string | null; createdAt: Date; prompt: string }[];
   notes: { id: string; content: string; category: string; pinned: boolean; createdAt: Date }[];
@@ -123,6 +123,35 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
   
   // Contact multi-select state
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
+  
+  // Manual contact state
+  const [isAddingContact, setIsAddingContact] = useState(false);
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactRole, setNewContactRole] = useState('');
+  const [isSubmittingContact, setIsSubmittingContact] = useState(false);
+
+  const handleSubmitManualContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newContactName.trim() || !newContactRole.trim()) return;
+    
+    setIsSubmittingContact(true);
+    try {
+      const { addManualContact } = await import('@/actions/brand-actions');
+      const res = await addManualContact(brand.id, newContactName, newContactRole);
+      if (res.error) {
+        alert(res.error);
+      } else {
+        setNewContactName('');
+        setNewContactRole('');
+        setIsAddingContact(false);
+        router.refresh();
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to add contact');
+    }
+    setIsSubmittingContact(false);
+  };
 
   const handleToggleContact = (id: string) => {
     setSelectedContactIds(prev => {
@@ -607,18 +636,6 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
           <span className="stat-card-label">Contacts</span>
           <span className="stat-card-value">{brand.contacts.length}</span>
         </div>
-        <div className="stat-card">
-          <span className="stat-card-label">AI Analyses</span>
-          <span className="stat-card-value">{brand.aiAnalyses.length}</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-card-label">Data Freshness</span>
-          <span className="stat-card-value" style={{
-            color: brand.dataFreshness >= 70 ? 'var(--accent-emerald)' : brand.dataFreshness >= 40 ? 'var(--accent-amber)' : 'var(--accent-rose)',
-          }}>
-            {brand.dataFreshness}%
-          </span>
-        </div>
       </div>
 
       {/* Status Selector & Delete */}
@@ -812,7 +829,7 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
                   <div style={{ height: '240px', width: '100%', position: 'relative', background: '#f5f5f5' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     {product.imageUrl ? (
-                      <a href={product.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%', height: '100%' }}>
+                      <a href={product.sourceUrl || '#'} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%', height: '100%' }}>
                         <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </a>
                     ) : (
@@ -990,6 +1007,9 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
               {loading['importing_apollo'] ? '⏳ Importing...' : '➕ Import Apollo CSV'}
               <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleApolloImport} disabled={loading['importing_apollo']} />
             </label>
+            <button className="btn btn-secondary btn-sm" onClick={() => setIsAddingContact(!isAddingContact)}>
+              ➕ Add Manually
+            </button>
             <a 
               href={`/api/export?brandId=${brand.id}&type=contacts`} 
               target="_blank" 
@@ -998,14 +1018,54 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
               📥 Export CSV
             </a>
           </div>
+
           {brand.contacts.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-icon">👤</div>
-              <div className="empty-state-title">No contacts found</div>
-              <p className="empty-state-description">Contacts are auto-extracted during scraping. Try re-scraping the brand website.</p>
+              {isAddingContact ? (
+                <form onSubmit={handleSubmitManualContact} style={{ padding: 'var(--space-md)', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-md)', display: 'flex', gap: 'var(--space-sm)', alignItems: 'flex-end', width: '100%', maxWidth: '600px' }}>
+                  <div style={{ flex: 1, textAlign: 'left' }}>
+                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Full Name</label>
+                    <input type="text" className="input" placeholder="e.g. Jane Doe" value={newContactName} onChange={e => setNewContactName(e.target.value)} required disabled={isSubmittingContact} style={{ width: '100%' }} />
+                  </div>
+                  <div style={{ flex: 1, textAlign: 'left' }}>
+                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Job Title / Role</label>
+                    <input type="text" className="input" placeholder="e.g. Head of Merchandising" value={newContactRole} onChange={e => setNewContactRole(e.target.value)} required disabled={isSubmittingContact} style={{ width: '100%' }} />
+                  </div>
+                  <button type="submit" className="btn btn-primary" disabled={isSubmittingContact}>
+                    {isSubmittingContact ? 'Saving...' : 'Save'}
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => setIsAddingContact(false)} disabled={isSubmittingContact}>
+                    Cancel
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <div className="empty-state-icon">👤</div>
+                  <div className="empty-state-title">No contacts found</div>
+                  <p className="empty-state-description">Contacts are auto-extracted during scraping. Try re-scraping the brand website, or add one manually.</p>
+                </>
+              )}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {isAddingContact && (
+                <form onSubmit={handleSubmitManualContact} style={{ padding: 'var(--space-md)', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-md)', display: 'flex', gap: 'var(--space-sm)', alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Full Name</label>
+                    <input type="text" className="input" placeholder="e.g. Jane Doe" value={newContactName} onChange={e => setNewContactName(e.target.value)} required disabled={isSubmittingContact} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Job Title / Role</label>
+                    <input type="text" className="input" placeholder="e.g. Head of Merchandising" value={newContactRole} onChange={e => setNewContactRole(e.target.value)} required disabled={isSubmittingContact} />
+                  </div>
+                  <button type="submit" className="btn btn-primary" disabled={isSubmittingContact}>
+                    {isSubmittingContact ? 'Saving...' : 'Save Contact'}
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => setIsAddingContact(false)} disabled={isSubmittingContact}>
+                    Cancel
+                  </button>
+                </form>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', background: 'var(--bg-tertiary)', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <input 

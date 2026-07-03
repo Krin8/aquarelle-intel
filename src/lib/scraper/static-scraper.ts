@@ -13,6 +13,7 @@ export interface ScrapedContent {
   links: { text: string; href: string }[];
   images: { alt: string; src: string }[];
   products?: any[];
+  extractedProducts?: any[];
   contentLength: number;
 }
 

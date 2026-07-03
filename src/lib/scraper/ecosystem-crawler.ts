@@ -8,7 +8,6 @@ puppeteer.use(StealthPlugin());
 interface CrawlerSettings {
   maxDepth: number;
   maxNodesPerScan: number;
-  modelPref: 'ollama' | 'gemini';
 }
 
 interface ExtractedEntity {
@@ -104,7 +103,7 @@ async function processCrawlQueue(seedBrandId: string, settings: CrawlerSettings)
         const pageText = await scrapeText(browser, nextNode.url);
         
         // Extract Entities
-        const extracted = await extractEntitiesWithAI(pageText, nextNode.name, settings.modelPref);
+        const extracted = await extractEntitiesWithAI(pageText, nextNode.name);
         
         // Persist to DB
         await persistEntities(nextNode, extracted, seedBrandId, settings);
@@ -152,7 +151,7 @@ async function scrapeText(browser: any, url: string): Promise<string> {
 }
 
 // ─── AI EXTRACTION ───────────────────────────────────────────────────────────
-async function extractEntitiesWithAI(pageText: string, sourceNodeName: string, modelPref: 'ollama' | 'gemini'): Promise<ExtractedEntity[]> {
+async function extractEntitiesWithAI(pageText: string, sourceNodeName: string): Promise<ExtractedEntity[]> {
   const systemPrompt = `You are a corporate intelligence crawler for the apparel industry. Your job is to extract an ecosystem graph from the provided webpage text.
 Identify every distinct company, partner, supplier, competitor, parent company, or investor mentioned in relation to the main entity (${sourceNodeName}).
 
@@ -199,8 +198,7 @@ Provide a JSON object with a "nodes" array:
             evidence: String(n.evidence || '').trim()
           })).filter((n: any) => n.name && n.name !== sourceNodeName) // prevent self-loops
         };
-      },
-      modelPref
+      }
     );
     return result.nodes;
   } catch (error) {

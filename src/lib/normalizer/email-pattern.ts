@@ -105,26 +105,7 @@ export async function findRobustDomainPattern(domain: string, samplePersons: Arr
       
       console.log(`[PatternFallback] Trying to derive pattern using sample person: ${samplePerson.name} on ${testDomain}`);
 
-      // --- HUNTER.IO FALLBACK ---
-      const hunterKey = process.env.HUNTER_API_KEY;
-      if (hunterKey) {
-        try {
-          const hunterRes = await fetch(`https://api.hunter.io/v2/email-finder?domain=${testDomain}&first_name=${encodeURIComponent(samplePerson.firstName)}&last_name=${encodeURIComponent(samplePerson.lastName)}&api_key=${hunterKey}`);
-        if (hunterRes.ok) {
-          const data = await hunterRes.json();
-          const foundEmail = data?.data?.email;
-          const isFound = data?.data?.source_type === 'found' || (data?.data?.sources && data?.data?.sources.length > 0);
-          if (foundEmail && isFound) {
-            console.log(`[PatternFallback] Hunter succeeded for ${samplePerson.name}: ${foundEmail}`);
-            const pattern = deriveEmailPattern(samplePerson.firstName, samplePerson.lastName, foundEmail);
-            const actualDomain = foundEmail.split('@')[1] || testDomain;
-            return { pattern, domain: actualDomain };
-          } else if (foundEmail && !isFound) {
-            console.log(`[PatternFallback] Hunter generated email ${foundEmail} for ${samplePerson.name} but lacked sources (hallucinated). Ignoring.`);
-          }
-        }
-      } catch (e) { console.warn('[PatternFallback] Hunter request error:', e); }
-    }
+      
 
     // --- FINDYMAIL FALLBACK ---
     const findymailKey = process.env.FINDYMAIL_API_KEY;
@@ -213,6 +194,27 @@ export async function findRobustDomainPattern(domain: string, samplePersons: Arr
           }
         }
       } catch (e) { console.warn('[PatternFallback] Prospeo request error:', e); }
+    }
+
+    // --- HUNTER.IO FALLBACK ---
+      const hunterKey = process.env.HUNTER_API_KEY;
+      if (hunterKey) {
+        try {
+          const hunterRes = await fetch(`https://api.hunter.io/v2/email-finder?domain=${testDomain}&first_name=${encodeURIComponent(samplePerson.firstName)}&last_name=${encodeURIComponent(samplePerson.lastName)}&api_key=${hunterKey}`);
+        if (hunterRes.ok) {
+          const data = await hunterRes.json();
+          const foundEmail = data?.data?.email;
+          const isFound = data?.data?.source_type === 'found' || (data?.data?.sources && data?.data?.sources.length > 0);
+          if (foundEmail && isFound) {
+            console.log(`[PatternFallback] Hunter succeeded for ${samplePerson.name}: ${foundEmail}`);
+            const pattern = deriveEmailPattern(samplePerson.firstName, samplePerson.lastName, foundEmail);
+            const actualDomain = foundEmail.split('@')[1] || testDomain;
+            return { pattern, domain: actualDomain };
+          } else if (foundEmail && !isFound) {
+            console.log(`[PatternFallback] Hunter generated email ${foundEmail} for ${samplePerson.name} but lacked sources (hallucinated). Ignoring.`);
+          }
+        }
+      } catch (e) { console.warn('[PatternFallback] Hunter request error:', e); }
     }
     }
   }

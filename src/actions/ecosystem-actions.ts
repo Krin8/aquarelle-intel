@@ -9,8 +9,7 @@ export async function startCrawlAction(seedBrandId: string, maxDepth: number, ma
     await startEcosystemCrawl(seedBrandId, {
       maxDepth,
       maxNodesPerScan,
-      modelPref: 'ollama',
-    });
+      });
     revalidatePath(`/brands/${seedBrandId}`);
     return { success: true };
   } catch (error) {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { startRegionScan, cancelRegionScan } from '@/actions/region-actions';
+import { CountryAutocomplete } from '@/components/CountryAutocomplete';
 
 interface ScanProgress {
   region: string;
@@ -56,6 +57,8 @@ const STEP_LABELS: Record<string, string> = {
 
 export function RegionScanClient({ initialBrands }: { initialBrands: RegionBrand[] }) {
   const [region, setRegion] = useState('');
+  const [country, setCountry] = useState('');
+  const [category, setCategory] = useState('all');
   const [maxBrands, setMaxBrands] = useState(20);
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const [brands, setBrands] = useState<RegionBrand[]>(initialBrands);
@@ -100,7 +103,7 @@ export function RegionScanClient({ initialBrands }: { initialBrands: RegionBrand
     setScanError(null);
 
     try {
-      const result = await startRegionScan(region.trim(), maxBrands);
+      const result = await startRegionScan(region.trim(), maxBrands, country.trim() || undefined, category);
       if (result.error) {
         setScanError(result.error);
         setIsStarting(false);
@@ -197,6 +200,34 @@ export function RegionScanClient({ initialBrands }: { initialBrands: RegionBrand
               style={{ width: '100%' }}
               disabled={progress?.isScanning}
             />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+              Country (Optional Target)
+            </label>
+            <CountryAutocomplete 
+              value={country}
+              onChange={setCountry}
+              disabled={progress?.isScanning}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+              Category (Optional)
+            </label>
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              className="input"
+              style={{ width: '100%' }}
+              disabled={progress?.isScanning}
+            >
+              <option value="all">Any Category</option>
+              <option value="menswear">Menswear</option>
+              <option value="womenswear">Womenswear</option>
+              <option value="kidswear">Kidswear</option>
+              <option value="unisex">Unisex</option>
+            </select>
           </div>
           <div>
             <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
@@ -298,7 +329,6 @@ export function RegionScanClient({ initialBrands }: { initialBrands: RegionBrand
                 <span key={name} style={{
                   fontSize: '11px',
                   padding: '2px 8px',
-                  borderRadius: '10px',
                   background: 'var(--bg-hover)',
                   borderRadius: 'var(--radius-lg)',
                   border: '1px solid var(--border-subtle)',

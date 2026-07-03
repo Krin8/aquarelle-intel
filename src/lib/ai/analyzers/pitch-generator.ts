@@ -9,9 +9,7 @@ export async function generatePitchAngles(
   customerType: string = 'new',
   pipelineData?: string,
   supplierIntelligence?: string,
-  customPrompt?: string,
-  modelPref?: 'ollama' | 'gemini'
-): Promise<{
+  customPrompt?: string): Promise<{
   pitchSuggestions: PitchSuggestion;
   rawResponse: string;
   model: string;
@@ -116,11 +114,10 @@ Respond with the JSON only.`;
       }
 
       return PitchSuggestionSchema.parse(parsed);
-    },
-    modelPref
+    }
   );
 
-  if (hasFinancialData && modelPref === 'gemini') {
+  if (hasFinancialData) {
     console.warn('[PitchAngles] Confidential financial intelligence was sent to an external model provider (Gemini). Confirm this is intended.');
   }
 

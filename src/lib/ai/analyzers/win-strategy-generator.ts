@@ -67,8 +67,7 @@ Weaknesses: ${supplier.weaknesses}`;
       (text: string) => {
         const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
         return JSON.parse(cleaned);
-      },
-      'gemini' // Use Gemini for strategic reasoning
+      }
     );
 
     const ws = result.winStrategy;

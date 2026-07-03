@@ -12,8 +12,7 @@ export async function discoverCompetitorsAction(targetBrandId: string, maxCompet
     await startCompetitorDiscovery(targetBrandId, {
       maxDepth: 1,
       maxCompetitorsPerScan: maxCompetitors,
-      modelPref: 'ollama',
-    });
+      });
     revalidatePath(`/brands/${targetBrandId}`);
     return { success: true };
   } catch (error) {
@@ -99,8 +98,7 @@ Valid gapTypes: product, manufacturing, supply_chain, quality, innovation, susta
       (text: string) => {
         const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
         return JSON.parse(cleaned);
-      },
-      'ollama'
+      }
     );
 
     if (result.gaps && result.gaps.length > 0) {

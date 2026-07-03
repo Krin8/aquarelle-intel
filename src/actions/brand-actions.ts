@@ -7,6 +7,7 @@ export async function createBrand(formData: FormData) {
   const name = formData.get('name') as string;
   const website = formData.get('website') as string;
   const region = formData.get('region') as string || 'Global';
+  const country = formData.get('country') as string || null;
   const segment = formData.get('segment') as string || null;
 
   if (!name || !website) {
@@ -32,6 +33,7 @@ export async function createBrand(formData: FormData) {
         name: name.trim(),
         website: normalizedUrl,
         region,
+        countryOfOrigin: country,
         segment,
         status: 'discovered',
       },
@@ -229,7 +231,7 @@ export async function importApolloCsv(brandId: string, csvText: string) {
 
     let importedCount = 0;
 
-    for (const record of records) {
+    for (const record of records as any[]) {
       // Apollo CSVs usually have: 'First Name', 'Last Name', 'Title', 'Email', 'Phone', 'LinkedIn Url'
       const firstName = record['First Name'] || '';
       const lastName = record['Last Name'] || '';
@@ -320,5 +322,42 @@ export async function clearBrandProductsAction(brandId: string) {
   } catch (error) {
     console.error('Failed to clear products:', error);
     return { error: 'Failed to clear products' };
+  }
+}
+
+export async function addManualContact(brandId: string, fullName: string, role: string) {
+  try {
+    const brand = await prisma.brand.findUnique({ where: { id: brandId } });
+    if (!brand) return { error: 'Brand not found' };
+
+    const nameParts = fullName.trim().split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    let email: string | undefined = undefined;
+
+    if (brand.emailPattern && brand.emailPattern !== 'unknown' && brand.emailDomain) {
+      const { generateEmail } = await import('@/lib/normalizer/email-pattern');
+      email = generateEmail(firstName, lastName, brand.emailDomain, brand.emailPattern);
+    }
+
+    const contact = await prisma.contact.create({
+      data: {
+        brandId,
+        name: fullName,
+        role: role,
+        email: email || null,
+        buyerType: 'manual',
+        confidenceScore: 1.0,
+        type: 'direct',
+        source: 'manual'
+      }
+    });
+
+    revalidatePath(`/brands/${brandId}`);
+    return { success: true, contact };
+  } catch (error: any) {
+    console.error('Failed to add manual contact:', error);
+    return { success: false, error: error.message };
   }
 }

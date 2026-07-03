@@ -31,7 +31,7 @@ export async function runDuckDuckGoSearch(query: string, existingBrowser?: Brows
     await page.waitForSelector('.result', { timeout: 10000 }).catch(() => null);
     
     const searchResults = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('.result')).slice(0, 10).map((el: any) => {
+      return Array.from(document.querySelectorAll('.result')).slice(0, 300).map((el: any) => {
         const title = el.querySelector('.result__title')?.innerText || '';
         const snippet = el.querySelector('.result__snippet')?.innerText || '';
         const url = el.querySelector('.result__url')?.innerText || '';

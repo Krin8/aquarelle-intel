@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrand } from '@/actions/brand-actions';
 import { scrapeBrand } from '@/actions/scrape-actions';
+import { CountryAutocomplete } from '@/components/CountryAutocomplete';
 
 const REGIONS = [
   'Global', 'Middle East', 'Europe', 'North America', 'South Asia',
@@ -31,6 +32,7 @@ export default function NewBrandPage() {
     phonesFound?: number;
     contentLength?: number;
   } | null>(null);
+  const [country, setCountry] = useState('');
 
   async function handleSubmit(formData: FormData) {
     setError('');
@@ -55,7 +57,7 @@ export default function NewBrandPage() {
         return;
       }
 
-      setScrapeResult(scrapeRes.content || null);
+      setScrapeResult((scrapeRes as any).content || null);
       setStage('done');
       setTimeout(() => router.push(`/brands/${result.brandId}`), 2000);
     }
@@ -148,6 +150,17 @@ export default function NewBrandPage() {
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>
+          </div>
+
+          <div className="input-group">
+            <label className="input-label" htmlFor="country">Country</label>
+            <CountryAutocomplete 
+              id="country"
+              name="country"
+              value={country}
+              onChange={setCountry}
+              disabled={stage !== 'idle' && stage !== 'error'}
+            />
           </div>
 
           <div className="input-group">

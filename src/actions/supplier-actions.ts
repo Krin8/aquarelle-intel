@@ -21,8 +21,7 @@ export async function discoverSuppliersAction(targetBrandId: string, maxSupplier
   try {
     await startSupplierDiscovery(targetBrandId, {
       maxSuppliersPerScan: maxSuppliers,
-      modelPref: 'ollama',
-    });
+      });
     revalidatePath(`/brands/${targetBrandId}`);
     return { success: true };
   } catch (error) {

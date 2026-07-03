@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 
 export async function runBuyerDiscoveryAction(brandId: string) {
   try {
-    const result = await discoverBuyersAndRelationships(brandId, 'ollama');
+    const result = await discoverBuyersAndRelationships(brandId);
     revalidatePath(`/brands/${brandId}`);
     return result;
   } catch (error) {

@@ -40,7 +40,7 @@ export async function getRegionScanProgress() {
  * Start a region scan: discover brands → scrape → analyze → gap detect → score.
  * Returns immediately; work happens in the background.
  */
-export async function startRegionScan(region: string, maxBrands: number = 20) {
+export async function startRegionScan(region: string, maxBrands: number = 20, targetCountry?: string, category?: string) {
   // Prevent concurrent scans
   if (globalThis.regionScanProgress?.isScanning) {
     return { error: 'A region scan is already in progress. Please wait for it to finish.' };
@@ -64,9 +64,9 @@ export async function startRegionScan(region: string, maxBrands: number = 20) {
   (async () => {
     try {
       // ─── PHASE 1: Discover brands ──────────────────────────────────────────
-      console.log(`[RegionScan] Phase 1: Discovering brands in "${region}"...`);
+      console.log(`[RegionScan] Phase 1: Discovering brands in "${region}"${targetCountry ? ` (Target: ${targetCountry})` : ''}...`);
       const { discoverBrandsInRegion } = await import('@/lib/scraper/region-discovery');
-      const discovered = await discoverBrandsInRegion(region, maxBrands, 'ollama');
+      const discovered = await discoverBrandsInRegion(region, maxBrands, targetCountry, category);
 
       if (discovered.length === 0) {
         if (globalThis.regionScanProgress) {
@@ -76,23 +76,55 @@ export async function startRegionScan(region: string, maxBrands: number = 20) {
         }
         return;
       }
+      
+      // Filter out brands we already have in the database to avoid re-processing them
+      const existingBrands = await prisma.brand.findMany({
+        select: { name: true, website: true }
+      });
+      
+      const normalizeDbUrl = (u: string) => {
+        try { return new URL(u.startsWith('http') ? u : `https://${u}`).hostname.replace(/^www\./, ''); } 
+        catch { return u; }
+      };
+      
+      const normalizeName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      
+      const existingNames = new Set(existingBrands.map(b => normalizeName(b.name)));
+      const existingUrls = new Set(existingBrands.filter(b => b.website).map(b => normalizeDbUrl(b.website as string)));
 
-      console.log(`[RegionScan] Discovered ${discovered.length} brands. Starting pipeline...`);
+      const newDiscovered = discovered.filter(b => {
+        const nameMatch = existingNames.has(normalizeName(b.name));
+        const urlMatch = b.website ? existingUrls.has(normalizeDbUrl(b.website)) : false;
+        return !nameMatch && !urlMatch;
+      });
+
+      console.log(`[RegionScan] AI extracted ${discovered.length} brands. After filtering existing, ${newDiscovered.length} are new.`);
+
+      if (newDiscovered.length === 0) {
+        if (globalThis.regionScanProgress) {
+          globalThis.regionScanProgress.phase = 'done';
+          globalThis.regionScanProgress.isScanning = false;
+          globalThis.regionScanProgress.currentBrand = 'Done - All discovered brands already exist in database.';
+        }
+        return;
+      }
+
+      console.log(`[RegionScan] Starting pipeline for ${newDiscovered.length} NEW brands...`);
 
       if (globalThis.regionScanProgress) {
         globalThis.regionScanProgress.phase = 'processing';
-        globalThis.regionScanProgress.totalBrands = discovered.length;
+        globalThis.regionScanProgress.totalBrands = newDiscovered.length;
       }
 
       // ─── PHASE 2: Process each brand through the full pipeline ─────────────
-      for (let i = 0; i < discovered.length; i++) {
+      for (let i = 0; i < newDiscovered.length; i++) {
         // Stop if user cancelled the scan
         if (globalThis.regionScanProgress && !globalThis.regionScanProgress.isScanning) {
           console.log('[RegionScan] Scan cancelled, stopping pipeline loop.');
           break;
         }
 
-        const brand = discovered[i];
+        const brand = newDiscovered[i];
 
         if (globalThis.regionScanProgress) {
           globalThis.regionScanProgress.currentIndex = i + 1;
@@ -192,6 +224,7 @@ async function processSingleBrand(brand: DiscoveredBrand, region: string) {
         name: brand.name,
         website: brand.website,
         region: region,
+        countryOfOrigin: brand.country,
         description: brand.description || null,
         status: 'discovered',
         customerType: 'new',
@@ -214,7 +247,7 @@ async function processSingleBrand(brand: DiscoveredBrand, region: string) {
   updateStep('analyzing');
   console.log(`[RegionScan] Analyzing ${brand.name}...`);
   const { runWebsiteAnalysis } = await import('@/actions/ai-actions');
-  const analysisResult = await runWebsiteAnalysis(brandId, 'ollama');
+  const analysisResult = await runWebsiteAnalysis(brandId);
   if (analysisResult.error) {
     console.warn(`[RegionScan] Analysis failed for ${brand.name}: ${analysisResult.error}`);
   }
@@ -223,7 +256,7 @@ async function processSingleBrand(brand: DiscoveredBrand, region: string) {
   updateStep('gap_detection');
   console.log(`[RegionScan] Gap detection for ${brand.name}...`);
   const { runGapDetection } = await import('@/actions/ai-actions');
-  const gapResult = await runGapDetection(brandId, 'ollama');
+  const gapResult = await runGapDetection(brandId);
   if (gapResult.error) {
     console.warn(`[RegionScan] Gap detection failed for ${brand.name}: ${gapResult.error}`);
   }
@@ -235,17 +268,6 @@ async function processSingleBrand(brand: DiscoveredBrand, region: string) {
   const scoreResult = await runPipelineScoring(brandId);
   if (scoreResult.error) {
     console.warn(`[RegionScan] Pipeline scoring failed for ${brand.name}: ${scoreResult.error}`);
-  }
-
-  // ─── 7. Contact Discovery & Verification ───────────────────────────────────────
-  updateStep('contact_discovery');
-  console.log(`[RegionScan] Contact discovery for ${brand.name}...`);
-  const { runContactDiscoveryForBrand } = await import('@/lib/scraper/contact-discovery');
-  const contactResult = await runContactDiscoveryForBrand(brandId);
-  if (!contactResult.success) {
-    console.warn(`[RegionScan] Contact discovery failed for ${brand.name}: ${contactResult.error}`);
-  } else {
-    console.log(`[RegionScan] Found ${contactResult.verifiedCount} verified contacts for ${brand.name}`);
   }
 
   // Update status

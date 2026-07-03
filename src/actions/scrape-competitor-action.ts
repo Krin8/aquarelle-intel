@@ -33,7 +33,7 @@ export async function scrapeCompetitorBrandAction(competitorId: string) {
       return { success: false, error: 'Not enough text scraped from the website.' };
     }
 
-    const analysis = await analyzeCompetitorProfile(pageData.text, competitor.name, competitor.targetBrand.name, 'ollama');
+    const analysis = await analyzeCompetitorProfile(pageData.text, competitor.name, competitor.targetBrand.name);
     
     if (!analysis) {
       return { success: false, error: 'AI analysis failed' };

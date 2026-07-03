@@ -7,23 +7,13 @@ import { generatePitchAngles } from '@/lib/ai/analyzers/pitch-generator';
 import { answerBrandQuestion } from '@/lib/ai/analyzers/qa-analyzer';
 import { generateFinancialIntelligence } from '@/lib/ai/analyzers/financial-analyzer';
 import { runAllSearches } from '@/lib/scraper/search-orchestrator';
-import { checkOllamaHealth } from '@/lib/ai/ollama-client';
+
 import { revalidatePath } from 'next/cache';
 
-export async function getGeminiStatus() {
-  return checkOllamaHealth();
-}
 
-export async function runWebsiteAnalysis(brandId: string, preFetchedModelPref?: 'ollama' | 'gemini') {
-  let modelPref = preFetchedModelPref;
-  if (!modelPref) {
-    try {
-      const { getModelPreference } = await import('@/actions/settings-actions');
-      modelPref = await getModelPreference();
-    } catch (e) {
-      modelPref = 'gemini';
-    }
-  }
+
+export async function runWebsiteAnalysis(brandId: string) {
+
 
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
@@ -49,7 +39,6 @@ export async function runWebsiteAnalysis(brandId: string, preFetchedModelPref?: 
       scrapeResult.content.markdown,
       brand.name,
       brand.website,
-      modelPref
     );
 
     // Store analysis
@@ -85,16 +74,8 @@ export async function runWebsiteAnalysis(brandId: string, preFetchedModelPref?: 
   }
 }
 
-export async function runGapDetection(brandId: string, preFetchedModelPref?: 'ollama' | 'gemini') {
-  let modelPref = preFetchedModelPref;
-  if (!modelPref) {
-    try {
-      const { getModelPreference } = await import('@/actions/settings-actions');
-      modelPref = await getModelPreference();
-    } catch (e) {
-      modelPref = 'gemini';
-    }
-  }
+export async function runGapDetection(brandId: string) {
+
 
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
@@ -109,10 +90,10 @@ export async function runGapDetection(brandId: string, preFetchedModelPref?: 'ol
 
   if (!brand) return { error: 'Brand not found' };
 
-  let websiteAnalysis = brand.aiAnalyses[0];
+  let websiteAnalysis: any = brand.aiAnalyses[0];
   if (!websiteAnalysis) {
     console.log(`[AI] Gap Detection triggered, but Website Analysis missing. Auto-running...`);
-    const analysisResult = await runWebsiteAnalysis(brandId, modelPref);
+    const analysisResult = await runWebsiteAnalysis(brandId);
     if (analysisResult.error) {
       return { error: 'Prerequisite Website Analysis failed: ' + analysisResult.error };
     }
@@ -136,7 +117,6 @@ export async function runGapDetection(brandId: string, preFetchedModelPref?: 'ol
       brand.name,
       brand.customerType,
       brand.pipelineData || undefined,
-      modelPref
     );
 
     const stored = await prisma.aIAnalysis.create({
@@ -166,16 +146,8 @@ export async function runGapDetection(brandId: string, preFetchedModelPref?: 'ol
   }
 }
 
-export async function runPitchGeneration(brandId: string, templateId?: string, preFetchedModelPref?: 'ollama' | 'gemini') {
-  let modelPref = preFetchedModelPref;
-  if (!modelPref) {
-    try {
-      const { getModelPreference } = await import('@/actions/settings-actions');
-      modelPref = await getModelPreference();
-    } catch (e) {
-      modelPref = 'gemini';
-    }
-  }
+export async function runPitchGeneration(brandId: string, templateId?: string) {
+
 
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
@@ -220,7 +192,6 @@ export async function runPitchGeneration(brandId: string, templateId?: string, p
       brand.customerType,
       brand.pipelineData || undefined,
       customPrompt,
-      modelPref
     );
 
     const stored = await prisma.aIAnalysis.create({
@@ -246,11 +217,7 @@ export async function runPitchGeneration(brandId: string, templateId?: string, p
 import { scorePipeline } from '@/lib/ai/analyzers/pipeline-scorer';
 
 export async function runPipelineScoring(brandId: string) {
-  let modelPref: 'ollama' | 'gemini' = 'gemini';
-  try {
-    const { getModelPreference } = await import('@/actions/settings-actions');
-    modelPref = await getModelPreference();
-  } catch (e) {}
+
 
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
@@ -266,14 +233,14 @@ export async function runPipelineScoring(brandId: string) {
 
   let websiteAnalysis = brand.aiAnalyses.find(a => a.analysisType === 'website_understanding');
   if (!websiteAnalysis) {
-    const res = await runWebsiteAnalysis(brandId, modelPref);
+    const res = await runWebsiteAnalysis(brandId);
     if (res.error || !res.analysisId) return { error: res.error || 'Website analysis failed to run automatically.' };
     websiteAnalysis = await prisma.aIAnalysis.findUnique({ where: { id: res.analysisId } }) as any;
   }
 
   let gapDetection = brand.aiAnalyses.find(a => a.analysisType === 'gap_detection');
   if (!gapDetection) {
-    const res = await runGapDetection(brandId, modelPref);
+    const res = await runGapDetection(brandId);
     if (res.error || !res.analysisId) return { error: res.error || 'Gap detection failed to run automatically.' };
     gapDetection = await prisma.aIAnalysis.findUnique({ where: { id: res.analysisId } }) as any;
   }
@@ -285,7 +252,6 @@ export async function runPipelineScoring(brandId: string) {
       brand.name,
       websiteAnalysis.structuredData || websiteAnalysis.response,
       gapDetection.structuredData || gapDetection.response,
-      modelPref
     );
 
     const stored = await prisma.aIAnalysis.create({
@@ -427,16 +393,8 @@ export async function generateDraft(brandId: string, contactId: string, stage: 1
   }
 }
 
-export async function generateFinancialIntelligenceAction(brandId: string, preFetchedModelPref?: 'ollama' | 'gemini') {
-  let modelPref = preFetchedModelPref;
-  if (!modelPref) {
-    try {
-      const { getModelPreference } = await import('@/actions/settings-actions');
-      modelPref = await getModelPreference();
-    } catch {
-      modelPref = 'gemini';
-    }
-  }
+export async function generateFinancialIntelligenceAction(brandId: string) {
+
 
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
@@ -467,7 +425,6 @@ export async function generateFinancialIntelligenceAction(brandId: string, preFe
     brand.priceRange,
     brand.segment,
     combinedContext,
-    modelPref
   );
 
   // Mark as AI estimated

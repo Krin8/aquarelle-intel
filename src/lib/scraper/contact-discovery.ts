@@ -85,7 +85,6 @@ export async function runContactDiscoveryForBrand(brandId: string) {
           }
           throw new Error('No JSON array found');
         },
-        'gemini',
         true // Enable Google Search Grounding to prevent hallucination
       );
 

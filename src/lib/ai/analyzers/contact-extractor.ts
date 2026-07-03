@@ -151,6 +151,8 @@ If exhaustive searching still yields fewer than 8 verified contacts, return only
 
 Accuracy is mandatory. The minimum target of 8 contacts must never override factual correctness.
 
+CRITICAL: Every contact MUST be a CURRENT employee of the target company at the time of the search. Do NOT include former employees, ex-employees, past employees, retired employees, contractors whose engagement has ended, advisors, or anyone whose current employment with the company cannot be confidently verified. Current employment is a mandatory requirement and takes precedence over finding additional contacts.
+
 CRITICAL: Respond with ONLY a valid JSON object in this exact format:
 {
   "contacts": [
@@ -174,7 +176,14 @@ Respond with the JSON only.`;
       userPrompt,
       (text) => {
         console.log(`[AI:KnowledgeContacts] Raw LLM Output for ${brandName}:\n${text}`);
-        let cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+        let cleaned = text.trim();
+        const jsonMatch = cleaned.match(/```(?:json)?([\s\S]*?)```/);
+        if (jsonMatch) {
+          cleaned = jsonMatch[1].trim();
+        } else {
+          cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+        }
+        
         if (cleaned.startsWith('"contacts"') || cleaned.startsWith('contacts')) {
           cleaned = '{' + cleaned + (cleaned.endsWith('}') ? '' : '}');
         }
@@ -185,7 +194,6 @@ Respond with the JSON only.`;
           return { contacts: [] };
         }
       },
-      'gemini',
       true
     );
     console.log(`[AI:KnowledgeContacts] Executed using model: ${model}`);

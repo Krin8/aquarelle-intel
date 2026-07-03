@@ -1,10 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-
-import { setModelPreference } from '@/actions/settings-actions';
+import { usePathname } from 'next/navigation';
 
 const navItems = [
   {
@@ -28,25 +25,8 @@ const navItems = [
   },
 ];
 
-export function Sidebar({ initialModel = 'ollama' }: { initialModel?: 'ollama' | 'gemini' }) {
+export function Sidebar() {
   const pathname = usePathname();
-  const [model, setModel] = useState<'ollama' | 'gemini'>(initialModel);
-  const router = useRouter();
-
-  const handleModelToggle = async () => {
-    try {
-      const nextModel = model === 'ollama' ? 'gemini' : 'ollama';
-      setModel(nextModel);
-      
-      // Server action to set cookie
-      await setModelPreference(nextModel);
-      router.refresh();
-    } catch (e) {
-      console.error('Failed to toggle model:', e);
-      // Revert state if failed
-      setModel(model);
-    }
-  };
 
   return (
     <aside className="sidebar">
@@ -82,30 +62,6 @@ export function Sidebar({ initialModel = 'ollama' }: { initialModel?: 'ollama' |
         </div>
       ))}
 
-      <div className="sidebar-footer">
-        <div 
-          className="sidebar-status" 
-          onClick={handleModelToggle}
-          style={{ 
-            cursor: 'pointer', 
-            padding: '8px', 
-            borderRadius: '6px',
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-subtle)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            userSelect: 'none'
-          }}
-          title="Click to toggle AI Model"
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="sidebar-status-dot" style={{ backgroundColor: model === 'gemini' ? 'var(--accent-indigo)' : 'var(--accent-emerald)' }}></span>
-            <span style={{ fontWeight: 500 }}>{model === 'gemini' ? 'Gemini Pro' : 'Ollama AI'}</span>
-          </div>
-          <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>⟲</span>
-        </div>
-      </div>
-    </aside>
+</aside>
   );
 }

@@ -23,9 +23,7 @@ export async function generateFinancialIntelligence(
   brandName: string,
   priceRange: string | null,
   segment: string | null,
-  marketContext: string,
-  modelPref: 'ollama' | 'gemini' = 'gemini'
-): Promise<FinancialIntelligence> {
+  marketContext: string): Promise<FinancialIntelligence> {
   const userPrompt = `Generate internal financial SOP metrics for the following brand:
 
 ## BRAND PROFILE
@@ -59,8 +57,7 @@ Using the context provided, infer the likely manufacturing costs and metrics.`;
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       const jsonString = jsonMatch ? jsonMatch[0] : text;
       return FinancialIntelligenceSchema.parse(JSON.parse(jsonString));
-    },
-    modelPref
+    }
   );
 
   return response.result;

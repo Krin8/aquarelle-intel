@@ -40,7 +40,7 @@ export default async function MfaVerifyPage({ searchParams }: { searchParams: Pr
         {setupData && !setupData.error && (
           <div style={{ marginBottom: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div style={{ padding: '12px', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #ddd' }}>
-              <Image src={setupData.qrCodeUrl} alt="QR Code" width={180} height={180} style={{ borderRadius: '4px' }} />
+              <Image src={setupData.qrCodeUrl || ''} alt="QR Code" width={180} height={180} style={{ borderRadius: '4px', display: 'block' }} />
             </div>
             <p style={{ color: 'white', fontSize: '14px', textAlign: 'center', marginTop: '16px' }}>
               Scan this QR code with your Authenticator app.

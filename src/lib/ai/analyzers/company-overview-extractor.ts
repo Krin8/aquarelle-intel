@@ -71,7 +71,6 @@ Extract the company overview fields.`;
         const parsed = JSON.parse(cleaned);
         return AICompanyOverviewSchema.parse(parsed);
       },
-      undefined,
       !searchSnippets
     );
 

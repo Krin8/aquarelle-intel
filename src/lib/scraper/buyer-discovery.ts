@@ -7,7 +7,7 @@ import { URL } from 'url';
 
 puppeteer.use(StealthPlugin());
 
-export async function discoverBuyersAndRelationships(brandId: string, modelPref: 'ollama' | 'gemini' = 'ollama') {
+export async function discoverBuyersAndRelationships(brandId: string) {
   const brand = await prisma.brand.findUnique({ where: { id: brandId } });
   if (!brand) throw new Error("Brand not found");
 
@@ -108,8 +108,7 @@ ${aquarelleCtx}`;
   const { result } = await generateStructuredResponse<{ buyers: any[] }>(
     systemPrompt,
     userPrompt,
-    (text) => JSON.parse(text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()),
-    modelPref
+    (text) => JSON.parse(text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim())
   );
 
   // Save to DB

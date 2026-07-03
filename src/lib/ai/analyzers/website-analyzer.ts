@@ -17,9 +17,7 @@ RULES:
 export async function analyzeWebsite(
   markdown: string,
   brandName: string,
-  websiteUrl: string,
-  modelPref?: 'ollama' | 'gemini'
-): Promise<{ analysis: WebsiteAnalysis; rawResponse: string; model: string }> {
+  websiteUrl: string): Promise<{ analysis: WebsiteAnalysis; rawResponse: string; model: string }> {
 
   const userPrompt = `Extract structured brand intelligence from the website content below.
 
@@ -87,8 +85,7 @@ If the website content is sparse, use your training knowledge to enrich the bran
   const { result, rawResponse, model } = await generateStructuredResponse(
     SYSTEM_PROMPT,
     userPrompt,
-    robustParser,
-    modelPref
+    robustParser
   );
 
   return { analysis: result, rawResponse, model };

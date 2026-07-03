@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { generateStructuredResponse } from '../ai/ollama-client';
+import { generateStructuredResponse } from '../ai/router';
 import { URL } from 'url';
 import { ScrapedContact } from './index';
 

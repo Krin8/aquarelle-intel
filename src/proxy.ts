@@ -30,7 +30,7 @@ export async function proxy(request: NextRequest) {
 
   if (sessionCookie?.value) {
     try {
-      payload = await decrypt(sessionCookie.value);
+      payload = await decrypt(sessionCookie!.value);
     } catch (e) {
       // Invalid token
     }

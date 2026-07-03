@@ -12,10 +12,34 @@ type CompanyOverviewProps = {
     turnover: string | null;
     storesCount: number | null;
     retailPriceMensShirt: string | null;
+    priceRange: string | null;
     productType: string | null;
     website: string | null;
   }
 };
+
+
+
+function getStoreGrade(stores: number | null) {
+  if (!stores) return null;
+  if (stores > 500) return { label: 'High', color: '#065f46', bg: '#d1fae5', border: '#34d399' };
+  if (stores > 150) return { label: 'Medium', color: '#92400e', bg: '#fef3c7', border: '#fbbf24' };
+  return { label: 'Small', color: '#1e3a8a', bg: '#dbeafe', border: '#60a5fa' };
+}
+
+function getPriceGrade(priceStr: string | null) {
+  if (!priceStr) return null;
+  const matches = priceStr.match(/\d+(\.\d+)?/g);
+  if (!matches) return null;
+  const numbers = matches.map(Number);
+  const avg = numbers.reduce((a, b) => a + b, 0) / numbers.length;
+
+  if (avg > 120) return { grade: 'A+', color: '#065f46', bg: '#d1fae5', border: '#34d399' };
+  if (avg >= 59) return { grade: 'A', color: '#065f46', bg: '#d1fae5', border: '#34d399' };
+  if (avg >= 29) return { grade: 'B', color: '#92400e', bg: '#fef3c7', border: '#fbbf24' };
+  if (avg >= 19) return { grade: 'C', color: '#9d174d', bg: '#fce7f3', border: '#f472b6' };
+  return { grade: 'D', color: '#991b1b', bg: '#fee2e2', border: '#f87171' };
+}
 
 export function CompanyOverviewTable({ brand }: CompanyOverviewProps) {
   // We mimic the spreadsheet layout
@@ -56,10 +80,48 @@ export function CompanyOverviewTable({ brand }: CompanyOverviewProps) {
               {brand.turnover || '-'}
             </td>
             <td style={{ padding: '8px 10px', borderRight: '1px solid var(--border-default)', color: brand.storesCount ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-              {brand.storesCount?.toString() || '-'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>{brand.storesCount?.toString() || '-'}</span>
+                {(() => {
+                  const grade = getStoreGrade(brand.storesCount);
+                  if (!grade) return null;
+                  return (
+                    <span style={{ 
+                      backgroundColor: grade.bg, 
+                      color: grade.color, 
+                      border: `1px solid ${grade.border}`,
+                      padding: '2px 6px', 
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 700
+                    }}>
+                      {grade.label}
+                    </span>
+                  );
+                })()}
+              </div>
             </td>
             <td style={{ padding: '8px 10px', borderRight: '1px solid var(--border-default)', color: brand.retailPriceMensShirt ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-              {brand.retailPriceMensShirt || '-'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>{brand.retailPriceMensShirt || '-'}</span>
+                {(() => {
+                  const grade = getPriceGrade(brand.retailPriceMensShirt);
+                  if (!grade) return null;
+                  return (
+                    <span style={{ 
+                      backgroundColor: grade.bg, 
+                      color: grade.color, 
+                      border: `1px solid ${grade.border}`,
+                      padding: '2px 6px', 
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 700
+                    }}>
+                      {grade.grade}
+                    </span>
+                  );
+                })()}
+              </div>
             </td>
             <td style={{ padding: '8px 10px', borderRight: '1px solid var(--border-default)', color: brand.productType ? 'var(--text-primary)' : 'var(--text-muted)' }}>
               {brand.productType || '-'}

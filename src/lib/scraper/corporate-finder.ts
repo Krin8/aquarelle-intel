@@ -10,7 +10,7 @@ puppeteer.use(StealthPlugin());
  * Automatically searches for and extracts the corporate/parent website 
  * domain for a given brand name using a hybrid Search + AI approach.
  */
-export async function findCorporateUrl(brandName: string, retailUrl: string, modelPref?: 'ollama' | 'gemini'): Promise<string | null> {
+export async function findCorporateUrl(brandName: string, retailUrl: string): Promise<string | null> {
   let browser;
   try {
     browser = await puppeteer.launch({
@@ -145,8 +145,7 @@ const { result } = await generateStructuredResponse<{
     }
 
     return parsed;
-  },
-  modelPref
+  }
 );
 
     if (!result?.bestUrl) return null;

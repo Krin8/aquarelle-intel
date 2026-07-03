@@ -9,7 +9,6 @@ puppeteer.use(StealthPlugin());
 
 interface SupplierCrawlSettings {
   maxSuppliersPerScan: number;
-  modelPref: 'ollama' | 'gemini';
 }
 
 export async function startSupplierDiscovery(targetBrandId: string, settings: SupplierCrawlSettings) {
@@ -78,8 +77,7 @@ Format: { "suppliers": [{ "name": "Company X", "type": "Garment Manufacturer", "
         (text: string) => {
           const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
           return JSON.parse(cleaned);
-        },
-        settings.modelPref
+        }
       );
       discoveredSuppliers = result.suppliers || [];
     } catch (e) {

@@ -10,7 +10,6 @@ puppeteer.use(StealthPlugin());
 interface CompetitorCrawlSettings {
   maxDepth: number;
   maxCompetitorsPerScan: number;
-  modelPref: 'ollama' | 'gemini';
 }
 
 interface DiscoveredCompetitor {
@@ -102,8 +101,7 @@ Format: { "competitors": [{ "name": "Company X", "url": "https://..." }] }`;
         (text: string) => {
           const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
           return JSON.parse(cleaned);
-        },
-        settings.modelPref
+        }
       );
       discoveredUrls = result.competitors || [];
     } catch (e) {
@@ -134,7 +132,7 @@ Format: { "competitors": [{ "name": "Company X", "url": "https://..." }] }`;
            continue;
         }
 
-        const analysis = await analyzeCompetitorProfile(pageData.text, comp.name, targetBrandName, settings.modelPref);
+        const analysis = await analyzeCompetitorProfile(pageData.text, comp.name, targetBrandName);
         
         if (!analysis || analysis.scores.length === 0) continue;
 
@@ -206,7 +204,7 @@ Format: { "competitors": [{ "name": "Company X", "url": "https://..." }] }`;
 // ─── AI DEEP ANALYSIS ────────────────────────────────────────────────────────
 import { getAquarelleContextString } from '../knowledge/aquarelle-kb';
 
-export async function analyzeCompetitorProfile(pageText: string, competitorName: string, targetBrandName: string, modelPref: 'ollama'|'gemini'): Promise<DiscoveredCompetitor | null> {
+export async function analyzeCompetitorProfile(pageText: string, competitorName: string, targetBrandName: string): Promise<DiscoveredCompetitor | null> {
   const aquarelleCtx = getAquarelleContextString();
   const systemPrompt = `You are an elite Enterprise Sales Intelligence Analyst working for Aquarelle India.
 Analyze the following webpage text of a company named ${competitorName}, which is a competitor to our prospect ${targetBrandName}.
@@ -264,8 +262,7 @@ ${pageText}`;
       (text: string) => {
         const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
         return JSON.parse(cleaned);
-      },
-      modelPref
+      }
     );
     return result;
   } catch (error) {

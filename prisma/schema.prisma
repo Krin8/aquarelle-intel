@@ -16,6 +16,7 @@ model Brand {
   status           String   @default("discovered") // discovered | researching | analyzed | qualified | rejected
   customerType     String   @default("new") // existing | pipeline | new
   region           String   @default("Global")
+  targetAudience   String?  // e.g. Menswear, Womenswear, Kidswear
   
   // Corporate Overview
   parentCompany    String?
