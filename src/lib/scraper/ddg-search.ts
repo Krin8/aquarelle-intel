@@ -11,6 +11,7 @@ export interface SearchResult {
 export async function runDuckDuckGoSearch(query: string, existingBrowser?: Browser | null): Promise<SearchResult[]> {
   let browser = existingBrowser;
   let browserCreatedHere = false;
+  let page: any = null;
 
   try {
     if (!browser || !browser.connected) {
@@ -18,7 +19,7 @@ export async function runDuckDuckGoSearch(query: string, existingBrowser?: Brows
       browserCreatedHere = true;
     }
 
-    const page = await browser.newPage();
+    page = await browser.newPage();
     const encodedQuery = encodeURIComponent(query);
     
     await page.goto(`https://duckduckgo.com/html/?q=${encodedQuery}`, { waitUntil: 'domcontentloaded' });
@@ -48,18 +49,16 @@ export async function runDuckDuckGoSearch(query: string, existingBrowser?: Brows
       ]);
     }
 
-    await page.close();
-    
-    if (browserCreatedHere && browser) {
-      await browser.close();
-    }
-
     return allResults;
   } catch (error) {
     console.warn(`[DDGSearch] Exception during search for "${query}":`, error);
+    return [];
+  } finally {
+    if (page && !page.isClosed()) {
+      await page.close().catch(() => {});
+    }
     if (browserCreatedHere && browser) {
       await browser.close().catch(() => {});
     }
-    return [];
   }
 }
