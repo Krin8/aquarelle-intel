@@ -1,7 +1,6 @@
 import { generateStructuredResponse } from '../ai/router';
 import { runAllSearches } from './search-orchestrator';
 import { launchBrowser } from "@/lib/browser";
-import * as cheerio from 'cheerio';
 
 
 export interface DiscoveredBrand {
@@ -57,65 +56,53 @@ export async function discoverBrandsInRegion(
 
         const results = await runAllSearches(browser, query);
 
-        // --- DEEP SCRAPE ENRICHMENT (fetch + cheerio, no browser) ---
-        // Enrich the first 30 results using lightweight HTTP fetch instead of Puppeteer
-        const enrichPromises = results.slice(0, 30).map(async (result, i) => {
-          try {
-            const targetUrl = result.url.startsWith('http') ? result.url : `https://${result.url}`;
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 8000);
+        // --- DEEP SCRAPE ENRICHMENT (parallel batches of 5 tabs) ---
+        const enrichTargets = results.slice(0, 30);
+        const BATCH_SIZE = 5;
+        for (let batchStart = 0; batchStart < enrichTargets.length; batchStart += BATCH_SIZE) {
+          if ((globalThis as any).regionScanProgress && !(globalThis as any).regionScanProgress.isScanning) break;
+          if (!browser || !browser.connected) break;
 
-            const resp = await fetch(targetUrl, {
-              signal: controller.signal,
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html',
-              },
-              redirect: 'follow',
-            });
-            clearTimeout(timeout);
+          const batch = enrichTargets.slice(batchStart, batchStart + BATCH_SIZE);
+          await Promise.allSettled(batch.map(async (result) => {
+            let page: any;
+            try {
+              if (!browser.connected) return;
+              page = await browser.newPage();
+              const targetUrl = result.url.startsWith('http') ? result.url : `https://${result.url}`;
+              await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
 
-            if (!resp.ok) return;
-            const html = await resp.text();
-            const $ = cheerio.load(html);
+              const scrapeData = await page.evaluate(() => {
+                const text = document.body.innerText.substring(0, 6000);
+                const links = Array.from(document.querySelectorAll('a'))
+                  .map(a => a.href)
+                  .filter(href => href.startsWith('http') && !href.includes(window.location.hostname))
+                  .filter(href => !href.includes('facebook.com') && !href.includes('instagram.com') && !href.includes('twitter.com') && !href.includes('linkedin.com') && !href.includes('pinterest.com'));
+                const uniqueLinks = [...new Set(links)].slice(0, 40);
+                return { text, uniqueLinks };
+              });
 
-            // Remove script/style tags for cleaner text
-            $('script, style, noscript, svg, iframe').remove();
-            const text = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 6000);
-
-            // Extract external links
-            const pageHost = new URL(targetUrl).hostname;
-            const links: string[] = [];
-            $('a[href^="http"]').each((_, el) => {
-              const href = $(el).attr('href');
-              if (!href) return;
-              try {
-                const linkHost = new URL(href).hostname;
-                if (linkHost === pageHost) return;
-                if (/facebook|instagram|twitter|linkedin|pinterest/.test(linkHost)) return;
-                links.push(href);
-              } catch {}
-            });
-            const uniqueLinks = [...new Set(links)].slice(0, 40);
-
-            if (text.length > 50) {
-              result.snippet += "\n[WEBSITE PREVIEW]: " + text;
+              if (scrapeData.text && scrapeData.text.trim().length > 0) {
+                result.snippet += "\n[WEBSITE PREVIEW]: " + scrapeData.text.replace(/\n+/g, ' ');
+              }
+              if (scrapeData.uniqueLinks.length > 0) {
+                result.snippet += "\n[EXTERNAL LINKS DETECTED]: " + scrapeData.uniqueLinks.join(', ');
+              }
+            } catch (scrapeErr) {
+              console.warn(`[RegionDiscovery] Failed to preview ${result.url} for enrichment.`);
+            } finally {
+              if (page && !page.isClosed()) {
+                await page.close().catch(() => { });
+              }
             }
-            if (uniqueLinks.length > 0) {
-              result.snippet += "\n[EXTERNAL LINKS DETECTED]: " + uniqueLinks.join(', ');
-            }
-          } catch {
-            // Silently skip — search snippet is usually enough
-          }
-        });
-        // Run all enrichment fetches in parallel (they're just HTTP requests, no browser)
-        await Promise.allSettled(enrichPromises);
+          }));
+        }
         // ------------------------------
 
         allSearchResults.push(...results);
         console.log(`[RegionDiscovery] Query "${query}" → ${results.length} results`);
-        // Small delay between searches to be respectful
-        await new Promise(r => setTimeout(r, 1500));
+        // Small delay between searches
+        await new Promise(r => setTimeout(r, 500));
       } catch (e) {
         console.warn(`[RegionDiscovery] Search query failed: "${query}"`, e instanceof Error ? e.message : e);
       }
