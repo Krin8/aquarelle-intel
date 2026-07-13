@@ -1,11 +1,8 @@
 import prisma from '@/lib/db';
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { generateStructuredResponse } from '../ai/router';
 import { runAllSearches } from './search-orchestrator';
 import type { Browser } from 'puppeteer';
 
-puppeteer.use(StealthPlugin());
 
 interface CompetitorCrawlSettings {
   maxDepth: number;
@@ -51,11 +48,7 @@ async function processCompetitorQueue(targetBrandId: string, targetBrandName: st
 
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      userDataDir: './.puppeteer_data',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+    browser = await launchBrowser();
 
     // ─── STEP 1: Discover via Search Engines ─────────────────────────────────
     const queries = [
@@ -203,6 +196,7 @@ Format: { "competitors": [{ "name": "Company X", "url": "https://..." }] }`;
 
 // ─── AI DEEP ANALYSIS ────────────────────────────────────────────────────────
 import { getAquarelleContextString } from '../knowledge/aquarelle-kb';
+import { launchBrowser } from "@/lib/browser";
 
 export async function analyzeCompetitorProfile(pageText: string, competitorName: string, targetBrandName: string): Promise<DiscoveredCompetitor | null> {
   const aquarelleCtx = getAquarelleContextString();

@@ -1,4 +1,5 @@
 import prisma from '../db';
+import { getApiKey } from '@/lib/settings';
 import { generateStructuredResponse } from '../ai/router';
 import { deriveEmailPattern, generateEmail } from '../normalizer/email-pattern';
 
@@ -145,7 +146,7 @@ export async function runContactDiscoveryForBrand(brandId: string) {
 
     if (discoveredDomain) {
       let hunterPatternFound = false;
-      const hunterKey = process.env.HUNTER_API_KEY;
+      const hunterKey = await getApiKey('HUNTER');
       if (hunterKey) {
         console.log(`[ContactDiscovery] Querying Hunter.io for domain pattern of ${discoveredDomain}...`);
         try {
@@ -172,7 +173,7 @@ export async function runContactDiscoveryForBrand(brandId: string) {
 
       // --- FINDYMAIL FALLBACK ---
       if (!hunterPatternFound) {
-        const findymailKey = process.env.FINDYMAIL_API_KEY;
+        const findymailKey = await getApiKey('FINDYMAIL');
         const samplePerson = discoveredPeople.find(p => p.firstName && p.lastName);
         if (findymailKey && samplePerson) {
           console.log(`[ContactDiscovery] Hunter skipped/failed. Querying Findymail for ${samplePerson.name}...`);
@@ -213,7 +214,7 @@ export async function runContactDiscoveryForBrand(brandId: string) {
 
       // --- DROPCONTACT FALLBACK ---
       if (derivedPattern === 'unknown') {
-        const dcKey = process.env.DROPCONTACT_API_KEY;
+        const dcKey = await getApiKey('DROPCONTACT');
         const samplePerson = discoveredPeople.find(p => p.firstName && p.lastName);
         if (dcKey && samplePerson) {
           console.log(`[ContactDiscovery] Findymail skipped/failed. Querying Dropcontact for ${samplePerson.name}...`);
@@ -254,7 +255,7 @@ export async function runContactDiscoveryForBrand(brandId: string) {
 
       // --- PEOPLE DATA LABS (PDL) FALLBACK ---
       if (derivedPattern === 'unknown') {
-        const pdlKey = process.env.PDL_API_KEY;
+        const pdlKey = await getApiKey('PDL');
         const samplePerson = discoveredPeople.find(p => p.firstName && p.lastName);
         if (pdlKey && samplePerson) {
           console.log(`[ContactDiscovery] Dropcontact skipped/failed. Querying People Data Labs for ${samplePerson.name}...`);
@@ -291,7 +292,7 @@ export async function runContactDiscoveryForBrand(brandId: string) {
 
       // --- PROSPEO FALLBACK ---
       if (derivedPattern === 'unknown') {
-        const prospeoKey = process.env.PROSPEO_API_KEY;
+        const prospeoKey = await getApiKey('PROSPEO');
         const samplePerson = discoveredPeople.find(p => p.firstName && p.lastName);
         if (prospeoKey && samplePerson) {
           console.log(`[ContactDiscovery] PDL skipped/failed. Querying Prospeo for ${samplePerson.name}...`);

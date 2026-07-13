@@ -1,9 +1,7 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { generateStructuredResponse } from '../ai/router';
 import { runAllSearches } from './search-orchestrator';
+import { launchBrowser } from "@/lib/browser";
 
-puppeteer.use(StealthPlugin());
 
 export interface DiscoveredBrand {
   name: string;
@@ -25,10 +23,7 @@ export async function discoverBrandsInRegion(
   let browser;
   let allSearchResults: { title: string; snippet: string; url: string }[] = [];
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+    browser = await launchBrowser();
 
     // ─── STEP 1: Research Trade Fairs & Databases ─────────────────────────────
     console.log(`[RegionDiscovery] Phase 1: Researching Industry Sources for "${targetCountry || region}"...`);
@@ -48,21 +43,49 @@ export async function discoverBrandsInRegion(
   // ─── STEP 2: Run searches via AI Search and DDG ──────────────────────────
 
     for (const query of searchQueries) {
+      if ((globalThis as any).regionScanProgress && !(globalThis as any).regionScanProgress.isScanning) {
+        console.log('[RegionDiscovery] Scan cancelled, stopping query loop.');
+        break;
+      }
+
       try {
+        if (!browser || !browser.connected) {
+          console.warn('[RegionDiscovery] Browser disconnected. Relaunching...');
+          browser = await launchBrowser();
+        }
+        
         const results = await runAllSearches(browser, query);
         
         // --- DEEP SCRAPE ENRICHMENT ---
-        // Scrape the first 5 websites for richer context
-        for (let i = 0; i < Math.min(5, results.length); i++) {
+        // Scrape the first 30 websites for richer context
+        for (let i = 0; i < Math.min(30, results.length); i++) {
+          if ((globalThis as any).regionScanProgress && !(globalThis as any).regionScanProgress.isScanning) {
+            console.log('[RegionDiscovery] Scan cancelled, stopping deep scrape loop.');
+            break;
+          }
           try {
-            if (browser) {
+            if (browser && browser.connected) {
               const page = await browser.newPage();
               const targetUrl = results[i].url.startsWith('http') ? results[i].url : `https://${results[i].url}`;
               await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
-              const pageText = await page.evaluate(() => document.body.innerText.substring(0, 1500));
-              if (pageText && pageText.trim().length > 0) {
-                results[i].snippet += "\n[WEBSITE PREVIEW]: " + pageText.replace(/\n+/g, ' ');
+              
+              const scrapeData = await page.evaluate(() => {
+                const text = document.body.innerText.substring(0, 6000);
+                const links = Array.from(document.querySelectorAll('a'))
+                  .map(a => a.href)
+                  .filter(href => href.startsWith('http') && !href.includes(window.location.hostname))
+                  .filter(href => !href.includes('facebook.com') && !href.includes('instagram.com') && !href.includes('twitter.com') && !href.includes('linkedin.com') && !href.includes('pinterest.com'));
+                const uniqueLinks = [...new Set(links)].slice(0, 40);
+                return { text, uniqueLinks };
+              });
+              
+              if (scrapeData.text && scrapeData.text.trim().length > 0) {
+                results[i].snippet += "\n[WEBSITE PREVIEW]: " + scrapeData.text.replace(/\n+/g, ' ');
               }
+              if (scrapeData.uniqueLinks.length > 0) {
+                results[i].snippet += "\n[EXTERNAL LINKS DETECTED]: " + scrapeData.uniqueLinks.join(', ');
+              }
+              
               await page.close();
             }
           } catch (scrapeErr) {
@@ -79,9 +102,7 @@ export async function discoverBrandsInRegion(
         console.warn(`[RegionDiscovery] Search query failed: "${query}"`, e instanceof Error ? e.message : e);
       }
     }
-  } finally {
-    if (browser) await browser.close().catch(() => {});
-  }
+    // End of discovery loop
 
   if (allSearchResults.length === 0) {
     console.warn(`[RegionDiscovery] No search results found for region "${region}"`);
@@ -107,13 +128,97 @@ export async function discoverBrandsInRegion(
   // ─── STEP 3: AI extraction — extract brand names + websites from results ──
   const brands = await extractBrandsFromResults(uniqueResults, region, maxBrands, category);
 
-  console.log(`[RegionDiscovery] AI extracted ${brands.length} brands for "${region}"`);
-  return brands;
+  console.log(`[RegionDiscovery] AI extracted ${brands.length} candidate brands. Starting Two-Pass Verification...`);
+  
+  const verifiedBrands = await verifyDiscoveredBrands(brands, browser, region, category);
+
+  console.log(`[RegionDiscovery] Two-Pass Verification complete. ${verifiedBrands.length} verified brands for "${region}"`);
+  return verifiedBrands;
+
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
+async function verifyDiscoveredBrands(
+  brands: DiscoveredBrand[],
+  browser: any,
+  region: string,
+  category?: string
+): Promise<DiscoveredBrand[]> {
+  const verifiedBrands: DiscoveredBrand[] = [];
+  
+  if (!browser) return brands;
+
+  console.log(`[Verification] Verifying ${brands.length} brands against strict criteria...`);
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < brands.length; i += BATCH_SIZE) {
+    if ((globalThis as any).regionScanProgress && !(globalThis as any).regionScanProgress.isScanning) {
+      console.log('[Verification] Scan cancelled, stopping verification.');
+      break;
+    }
+
+    const batch = brands.slice(i, i + BATCH_SIZE);
+    
+    const batchPromises = batch.map(async (brand) => {
+      try {
+        if (!browser.connected) {
+          console.warn('[Verification] Browser disconnected. Falling back for this brand.');
+          return brand; 
+        }
+        
+        const page = await browser.newPage();
+        const targetUrl = brand.website.startsWith('http') ? brand.website : `https://${brand.website}`;
+        
+        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        const websiteText = await page.evaluate(() => document.body.innerText.substring(0, 6000));
+        await page.close();
+        
+        const systemPrompt = `You are a strict brand verification AI. 
+Analyze the website text of "${brand.name}".
+RULES:
+1. Verify if they actually sell shirts/apparel. If they only sell shoes or accessories, reject them.
+2. Verify they are NOT a massive global fast-fashion giant (like Zara, H&M, Shein).
+3. Verify they are reasonably based in or operate in "${region}".
+Output JSON: { "is_valid": true, "reason": "brief reason why" } or { "is_valid": false, "reason": "brief reason why" }`;
+        
+        const userPrompt = `Website Text for ${brand.name} (${brand.website}):\n\n${websiteText.substring(0, 5000)}`;
+        
+        const { result } = await generateStructuredResponse<{ is_valid: boolean }>(
+          systemPrompt,
+          userPrompt,
+          (text) => {
+            const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+            try {
+              return JSON.parse(cleaned);
+            } catch (e) {
+              return { is_valid: true };
+            }
+          }
+        );
+        
+        if (result.is_valid === false) {
+          console.log(`[Verification] Rejected ${brand.name}: Failed criteria (Sportswear, Fast Fashion, or wrong region)`);
+          return null;
+        } else {
+          return brand;
+        }
+      } catch (err) {
+        console.warn(`[Verification] Scrape failed for ${brand.name}, keeping as fallback.`);
+        return brand; 
+      }
+    });
+    
+    const results = await Promise.all(batchPromises);
+    verifiedBrands.push(...(results.filter(b => b !== null) as DiscoveredBrand[]));
+  }
+  
+  return verifiedBrands;
 }
 
 // ─── SEARCH QUERY BUILDER ──────────────────────────────────────────────────────
 // Generates multiple search queries to maximize coverage for a region.
-// Focused on shirts/apparel matching Aquarelle's capabilities.
+// Focused on shirts/apparel matching Tropic's capabilities.
 function buildSearchQueries(region: string, maxBrands: number, industrySources: string[] = [], targetCountry?: string, category?: string): string[] {
   // Map regions to specific countries for more targeted searches
   const regionCountries: Record<string, string[]> = {
@@ -144,24 +249,26 @@ function buildSearchQueries(region: string, maxBrands: number, industrySources: 
   // Core discovery queries — broader to catch more, but still apparel focused
   const templates = [
     (c: string) => `top ${catStr}shirt brands in ${c}`,
-    (c: string) => `list of ${catStr}shirt companies ${c}`,
-    (c: string) => `emerging independent ${catStr}shirt brands ${c}`,
+    (c: string) => `largest commercial ${catStr} brands ${c}`,
+    (c: string) => `top premium high-street ${catStr} brands ${c}`,
+    (c: string) => `list of ${catStr}clothing companies ${c}`,
+    (c: string) => `emerging independent ${catStr}apparel brands ${c}`,
     (c: string) => `boutique ${catStr} brands ${c}`,
     (c: string) => `mid-sized ${catStr}shirts companies ${c}`,
-    (c: string) => `independent ${catStr}shirt labels ${c}`,
+    (c: string) => `independent ${catStr}fashion labels ${c}`,
     (c: string) => `niche ${catStr}shirt brands based in ${c}`,
-    (c: string) => `direct to consumer ${catStr}shirt brands ${c}`,
-    (c: string) => `"50 best" ${catStr} shirt brands ${c}`,
-    (c: string) => `"100 independent" ${catStr} shirt brands ${c}`,
+    (c: string) => `direct to consumer ${catStr}apparel brands ${c}`,
+    (c: string) => `"50 best" ${catStr} clothing brands ${c}`,
+    (c: string) => `"100 independent" ${catStr} fashion brands ${c}`,
     (c: string) => `${catStr} shirts brand directory ${c} -site:pinterest.com`,
-    (c: string) => `"100 best" ${catStr} shirt brands ${c}`,
+    (c: string) => `"100 best" ${catStr} apparel brands ${c}`,
     (c: string) => `"100 independent" ${catStr} shirt brands ${c}`,
-    (c: string) => `"75 best" ${catStr} shirt brands ${c}`,
+    (c: string) => `"75 best" ${catStr} clothing brands ${c}`,
     (c: string) => `"top 100" ${catStr} shirt companies ${c}`,
-    (c: string) => `"20 best" ${catStr} startup shirt brands ${c}`,
-    (c: string) => `"best new" ${catStr} shirt brands 2026 ${c}`,
-    (c: string) => `${catStr} shirt brand list site:faire.com ${c}`,
-    (c: string) => `${catStr} shirts exhibitor list ${c} trade show`,
+    (c: string) => `"20 best" ${catStr} startup apparel brands ${c}`,
+    (c: string) => `"best new" ${catStr} fashion brands 2026 ${c}`,
+    (c: string) => `${catStr} clothing brand list site:faire.com ${c}`,
+    (c: string) => `${catStr} apparel exhibitor list ${c} trade show`,
     (c: string) => `${catStr} shirt brands "wholesale directory" ${c}`,
     (c: string) => `${catStr} shirt brand database ${c}`,
     (c: string) => `${catStr} shirt brands "we love" ${c} roundup`,
@@ -326,7 +433,7 @@ function buildSearchQueries(region: string, maxBrands: number, industrySources: 
 
   // We roughly need 1 query per 3 requested brands to get enough valid results
   // We already have some queries from trade fairs, so we subtract that
-  const targetQueries = Math.max(5, Math.ceil(maxBrands / 3));
+  const targetQueries = Math.max(5, maxBrands);
   
   // Cycle through countries and templates until we hit our target query count
   let cIdx = 0;
@@ -368,6 +475,10 @@ async function discoverIndustrySources(browser: any, region: string, targetCount
     ];
 
     for (const query of queries) {
+      if ((globalThis as any).regionScanProgress && !(globalThis as any).regionScanProgress.isScanning) {
+        console.log('[RegionDiscovery] Scan cancelled, stopping industry sources search.');
+        break;
+      }
       try {
         const results = await runAllSearches(browser, query);
         allSearchResults.push(...results);
@@ -439,10 +550,17 @@ RULES:
 1. Only extract REAL brand companies — not directories, news articles, blog posts, or marketplace listings.
 2. The URL must be the brand's official website (not social media, not a third-party directory).
 3. Skip brands that are purely: workwear, footwear-only, accessories-only, luxury haute couture with in-house production, or fast-fashion giants (Zara, H&M, Shein).
-4. CRITICAL PRODUCT RULE: You MUST ONLY extract brands that sell SHIRTS. If they do not sell shirts, you MUST set sells_shirts to false.
-5. CRITICAL GEOGRAPHY RULE: You MUST verify the brand is originally founded, headquartered, or primarily native to: ${region}. DO NOT include massive global conglomerates just because they operate there. If a brand is NOT native to ${region}, you MUST set matches_region to false.
-6. CRITICAL CATEGORY RULE: ${category && category !== 'all' ? `You MUST ONLY extract brands that sell ${category}. If they do not sell ${category}, set matches_category to false.` : 'Extract brands selling menswear or womenswear.'}
-7. Output raw JSON only — no markdown fences, no preamble.`;
+4. CRITICAL PRODUCT RULE: DO NOT INCLUDE brands that do not sell shirts. If the brand only sells bottoms, accessories, shoes, or outerwear, you MUST COMPLETELY REMOVE THEM from the JSON array. Only include them if they explicitly sell shirts/blouses.
+5. CRITICAL GEOGRAPHY RULE: You MUST verify the brand is originally founded, headquartered, or primarily native to: ${region}. DO NOT include massive global conglomerates just because they operate there. If they are not native, COMPLETELY REMOVE THEM.
+6. CRITICAL CATEGORY RULE: ${category && category !== 'all' ? `You MUST ONLY extract brands that sell ${category}. If they do not, COMPLETELY REMOVE THEM.` : 'Extract brands selling menswear or womenswear.'}
+7. Output raw JSON only — no markdown fences, no preamble.
+
+EXAMPLES OF CORRECT EVALUATION:
+- "Boggi Milano is a premium Italian menswear brand with 200 stores..." -> INCLUDE (It is premium menswear, sells shirts, and is Italian).
+- "Castore is a premium sportswear brand based in the UK..." -> EXCLUDE (It is sportswear, not formal/casual shirts, and is UK-based, not Italian).
+- "Zara opens new store in Milan..." -> EXCLUDE (It is a fast-fashion giant, and headquartered in Spain, not Italy).
+- "Slowear is an Italian collective brand known for high-quality menswear..." -> INCLUDE (It is premium, Italian, and sells shirts).
+- "H&M launches new collection..." -> EXCLUDE (Fast-fashion giant).`;
 
   const allExtractedBrands: DiscoveredBrand[] = [];
 

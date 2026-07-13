@@ -2,6 +2,7 @@ import type { Browser } from 'puppeteer';
 import { runAiSearch } from '../ai/ai-search';
 import { runDuckDuckGoSearch } from './ddg-search';
 import { runGoogleAiSearch } from './google-ai-search';
+import { runSerperSearch } from './serper-search';
 
 export interface SearchResult {
   title: string;
@@ -17,6 +18,7 @@ export interface SearchResult {
  *   1. Gemini API  (ai-search.ts)          – always attempted
  *   2. DuckDuckGo (ddg-search.ts)          – always attempted
  *   3. Google AI Mode (google-ai-search.ts) – requires browser
+ *   4. Serper API (serper-search.ts)       - always attempted
  *
  * Each source is wrapped in its own try/catch — a failure in one never
  * blocks the others.
@@ -38,6 +40,15 @@ export async function runAllSearches(
     }),
   });
   */
+
+  // 2. Serper API
+  tasks.push({
+    name: 'Serper',
+    promise: runSerperSearch(query).catch((e) => {
+      console.warn(`[SearchOrch] Serper failed: ${e?.message || e}`);
+      return [] as SearchResult[];
+    }),
+  });
 
   
   // 3. DuckDuckGo Search

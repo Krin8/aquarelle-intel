@@ -1,9 +1,7 @@
 import prisma from '@/lib/db';
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { generateStructuredResponse } from '../ai/router';
+import { launchBrowser } from "@/lib/browser";
 
-puppeteer.use(StealthPlugin());
 
 interface CrawlerSettings {
   maxDepth: number;
@@ -62,11 +60,7 @@ async function processCrawlQueue(seedBrandId: string, settings: CrawlerSettings)
 
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      userDataDir: './.puppeteer_data',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+    browser = await launchBrowser();
 
     // Main loop
     while (true) {

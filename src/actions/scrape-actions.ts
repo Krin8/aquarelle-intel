@@ -9,6 +9,7 @@ import { filterShirts, dedupeProductVariants } from '@/lib/scraper/shirt-filter'
 import { categorizeProducts } from '@/lib/ai/analyzers/product-categorizer';
 import { convertToUSD } from '@/lib/scraper/fx-converter';
 import { findDomainAndPatternWithHunter, findDomainPatternWithHunter, findRobustDomainPattern, generateEmail, deriveEmailPattern } from '@/lib/normalizer/email-pattern';
+import { verifyEmail } from '@/lib/scraper/myemailverifier';
 import { revalidatePath } from 'next/cache';
 
 
@@ -236,7 +237,16 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
     for (const c of aiContacts) {
       if (!c.name) continue;
 
-      const emailToUse = c.email || undefined;
+      let emailToUse = c.email || undefined;
+
+      // TWO-STEP VERIFICATION
+      if (emailToUse) {
+        const verification = await verifyEmail(emailToUse);
+        if (verification.status === 'invalid') {
+          console.log(`[Scrape] Verification failed for AI contact ${emailToUse}, discarding email.`);
+          emailToUse = undefined;
+        }
+      }
 
       // Skip duplicate emails within the same batch
       if (emailToUse) {
@@ -274,12 +284,23 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
     let scrapedContactCount = 0;
     if (content.extractedContacts) {
       for (const contact of content.extractedContacts) {
+        let emailToUse = contact.email || undefined;
+        
+        // TWO-STEP VERIFICATION
+        if (emailToUse) {
+          const verification = await verifyEmail(emailToUse);
+          if (verification.status === 'invalid') {
+            console.log(`[Scrape] Verification failed for Scrapy contact ${emailToUse}, discarding email.`);
+            emailToUse = undefined;
+          }
+        }
+
         // Check for duplicates by email or phone
         const existing = await prisma.contact.findFirst({
           where: { 
             brandId, 
             OR: [
-              ...(contact.email ? [{ email: contact.email }] : []),
+              ...(emailToUse ? [{ email: emailToUse }] : []),
               ...(contact.phone ? [{ phone: contact.phone }] : [])
             ]
           },
@@ -290,7 +311,7 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
           data: {
             brandId,
             name: contact.name || 'Unknown',
-            email: contact.email,
+            email: emailToUse,
             phone: contact.phone,
             source: 'website',
             confidenceScore: (contact.confidence || 50) / 100,
@@ -446,6 +467,9 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
       const overviewResult = await extractCompanyOverview(brand.name, '', content.markdown, brand.region);
       if (overviewResult) {
         overviewData = overviewResult;
+        if (overviewData.countryOfOrigin) {
+          overviewData.region = overviewData.countryOfOrigin;
+        }
         console.log(`[Scrape] AI extracted company overview successfully.`);
       } else {
         console.warn('[Scrape] AI company overview extraction failed.');
@@ -664,6 +688,17 @@ export async function generateMoreContacts(brandId: string) {
     for (const c of newAiContacts) {
       if (!c.name) continue;
       
+      let emailToUse = c.email || undefined;
+
+      // TWO-STEP VERIFICATION
+      if (emailToUse) {
+        const verification = await verifyEmail(emailToUse);
+        if (verification.status === 'invalid') {
+          console.log(`[Scrape] Verification failed for generated contact ${emailToUse}, discarding email.`);
+          emailToUse = undefined;
+        }
+      }
+
       await prisma.contact.create({
         data: {
           brandId,
@@ -671,12 +706,12 @@ export async function generateMoreContacts(brandId: string) {
           role: c.role || null,
           department: c.department || null,
           seniority: c.seniority || null,
-          email: c.email || undefined,
+          email: emailToUse,
           phone: c.phone || undefined,
           linkedinUrl: c.linkedinUrl || undefined,
           buyerType: c.buyerType as any || 'unknown',
           source: 'google_ai_sge',
-          confidenceScore: getContactConfidence(c)
+          confidenceScore: getContactConfidence({ ...c, email: emailToUse })
         }
       });
       savedCount++;

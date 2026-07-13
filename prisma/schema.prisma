@@ -7,53 +7,49 @@ datasource db {
 }
 
 model Brand {
-  id               String   @id @default(cuid())
-  name             String
-  website          String
-  corporateUrl     String?
-  linkedinUrl      String?
-  logoUrl          String?
-  status           String   @default("discovered") // discovered | researching | analyzed | qualified | rejected
-  customerType     String   @default("new") // existing | pipeline | new
-  region           String   @default("Global")
-  targetAudience   String?  // e.g. Menswear, Womenswear, Kidswear
-  
-  // Corporate Overview
-  parentCompany    String?
-  countryOfOrigin  String?
-  city             String?
-  state            String?
-  turnover         String?
-  storesCount      Int?
+  id                   String              @id @default(cuid())
+  name                 String
+  website              String
+  corporateUrl         String?
+  linkedinUrl          String?
+  logoUrl              String?
+  status               String              @default("discovered")
+  customerType         String              @default("new")
+  region               String              @default("Global")
+  segment              String?
+  priceRange           String?
+  complianceNotes      String?
+  description          String?
+  lastScrapedAt        DateTime?
+  dataFreshness        Int                 @default(0)
+  matchScore           Int?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  marketGrade          String?
+  pipelineData         String?
+  pipelineScore        Int?
+  city                 String?
+  countryOfOrigin      String?
+  parentCompany        String?
+  productType          String?
   retailPriceMensShirt String?
-  productType      String?
-
-  segment          String?  // luxury | premium | mid-range | value | fast-fashion
-  priceRange       String?  // e.g. "$50-$200"
-  complianceNotes  String?
-  description      String?
-  emailDomain      String?
-  emailPattern     String?
-  lastScrapedAt    DateTime?
-  dataFreshness    Int      @default(0) // 0-100
-  matchScore       Int?     // 0-100, set by AI gap detection
-  pipelineScore    Int?     // priority score from SOP pipeline data
-  pipelineData     String?  // JSON blob of imported SOP financial data (CPU, margin, FOB, ROS%)
-  marketGrade      String?  // A, B, C, D from market segmentation
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  products    Product[]
-  contacts    Contact[]
-  notes       Note[]
-  aiAnalyses  AIAnalysis[]
-  scrapeLogs  ScrapeLog[]
-  documents   Document[]
-  ecosystemNodes EcosystemNode[]
-  competitors CompetitorProfile[] @relation("BrandCompetitors")
-  suppliers SupplierProfile[] @relation("BrandSuppliers")
-  salesOpportunities SalesOpportunity[]
-  feedbackLoops   FeedbackLoop[]
+  state                String?
+  storesCount          Int?
+  turnover             String?
+  emailDomain          String?
+  emailPattern         String?
+  targetAudience       String?
+  aiAnalyses           AIAnalysis[]
+  competitors          CompetitorProfile[] @relation("BrandCompetitors")
+  contacts             Contact[]
+  documents            Document[]
+  ecosystemNodes       EcosystemNode[]
+  feedbackLoops        FeedbackLoop[]
+  notes                Note[]
+  products             Product[]
+  salesOpportunities   SalesOpportunity[]
+  scrapeLogs           ScrapeLog[]
+  suppliers            SupplierProfile[]   @relation("BrandSuppliers")
 
   @@index([status])
   @@index([region])
@@ -63,68 +59,61 @@ model Product {
   id         String  @id @default(cuid())
   brandId    String
   name       String
-  category   String? // e.g. Oxford Shirts, Flannel Shirts
-  fabricTag  String? // e.g. Oxford, Linen, Denim
-  priceMin   Float?  // Converted to USD
-  priceMax   Float?  // Converted to USD
-  localPrice Float?  // Original extracted price
-  currency   String? @default("USD")
-  fit        String? // slim | regular | oversized | relaxed
+  category   String?
+  priceMin   Float?
+  priceMax   Float?
+  fit        String?
   material   String?
-  season     String? // SS25 | AW25 | year-round
+  season     String?
   imageUrl   String?
   sourceUrl  String?
-  confidence Float   @default(0.5) // 0-1
-
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  confidence Float   @default(0.5)
+  currency   String? @default("USD")
+  localPrice Float?
+  fabricTag  String?
+  brand      Brand   @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@index([brandId])
 }
 
 model Contact {
-  id              String  @id @default(cuid())
-  brandId         String
-  name            String
-  firstName       String?
-  lastName        String?
-  middleName      String?
-  role            String? // e.g. "Head of Wholesale", "Buying Director"
-  department      String? // e.g. "Wholesale/B2B", "Sales", "Merchandising/Buying", "Executive/C-Suite", "Marketing", "Other"
-  seniority       String? // e.g. "C-Level", "VP", "Director", "Manager", "Individual Contributor"
-  email           String?
-  phone           String?
-  linkedinUrl     String?
-  officeLocation  String?
-  reportingStructure String?
-  mutualConnections String?
-  buyerType       String  @default("unknown") // decision_maker | influencer | gatekeeper | unknown
-  type            String  @default("direct") // direct | generic | phone
-  confidenceScore Float   @default(0.3) // 0-1
-  source          String  @default("website") // website | linkedin | zoominfo | manual
-  
-  // Buyer Intelligence Extended Fields
-  areasOfResponsibility String? // JSON Array
-  productCategories     String? // JSON Array
-  brandsManaged         String? // JSON Array
-  previousEmployers     String? // JSON Array
-  yearsInRole           Int?
+  id                        String             @id @default(cuid())
+  brandId                   String
+  name                      String
+  role                      String?
+  department                String?
+  seniority                 String?
+  email                     String?
+  phone                     String?
+  linkedinUrl               String?
+  officeLocation            String?
+  reportingStructure        String?
+  mutualConnections         String?
+  buyerType                 String             @default("unknown")
+  type                      String             @default("direct")
+  confidenceScore           Float              @default(0.3)
+  source                    String             @default("website")
+  areasOfResponsibility     String?
+  productCategories         String?
+  brandsManaged             String?
+  previousEmployers         String?
+  yearsInRole               Int?
   sustainabilityInitiatives String?
-  procurementPriorities String?
-  publicTalks           String? // JSON Array
-  certifications        String? // JSON Array
-  languages             String? // JSON Array
-  relevanceScore        Int?    // 0-100 based on Aquarelle alignment
-  isVerified            Boolean @default(false)
-  verificationStatus    String? // null | "valid" | "catch-all" | "invalid" | "unverified"
-  
-  createdAt       DateTime @default(now())
-
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  outreachStrategy OutreachStrategy?
-
-  // Relationship Graph Links
-  sourceEdges RelationshipEdge[] @relation("SourceEdges")
-  targetEdges RelationshipEdge[] @relation("TargetEdges")
+  procurementPriorities     String?
+  publicTalks               String?
+  certifications            String?
+  languages                 String?
+  relevanceScore            Int?
+  isVerified                Boolean            @default(false)
+  createdAt                 DateTime           @default(now())
+  verificationStatus        String?
+  firstName                 String?
+  lastName                  String?
+  middleName                String?
+  brand                     Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  outreachStrategy          OutreachStrategy?
+  targetEdges               RelationshipEdge[] @relation("TargetEdges")
+  sourceEdges               RelationshipEdge[] @relation("SourceEdges")
 
   @@index([brandId])
 }
@@ -132,37 +121,35 @@ model Contact {
 model AIAnalysis {
   id             String   @id @default(cuid())
   brandId        String
-  analysisType   String   // website_understanding | gap_detection | pitch_suggestion
+  analysisType   String
   prompt         String
   response       String
-  structuredData String?  // JSON string of parsed output
+  structuredData String?
   modelUsed      String   @default("llama3.1:8b")
   tokensUsed     Int?
-  feedbackRating String?  // null | thumbs_up | thumbs_down
+  feedbackRating String?
   createdAt      DateTime @default(now())
-
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand          Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@index([brandId])
   @@index([analysisType])
 }
 
 model ScrapeLog {
-  id             String   @id @default(cuid())
-  brandId        String
-  url            String
-  method         String   @default("cheerio") // cheerio | puppeteer
-  status         String   @default("pending") // pending | success | failed | blocked
-  contentHash    String?
-  rawContentPath String?  // file path to stored raw content
-  errorMessage   String?
-  pageTitle      String?
+  id              String   @id @default(cuid())
+  brandId         String
+  url             String
+  method          String   @default("cheerio")
+  status          String   @default("pending")
+  contentHash     String?
+  rawContentPath  String?
+  errorMessage    String?
+  pageTitle       String?
   metaDescription String?
-  contentLength  Int?
-  scrapedData    String?  // JSON: { emails, phones, headings, linkCount, imageCount }
-  scrapedAt      DateTime @default(now())
-
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  contentLength   Int?
+  scrapedAt       DateTime @default(now())
+  scrapedData     String?
+  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@index([brandId])
 }
@@ -171,12 +158,11 @@ model Note {
   id        String   @id @default(cuid())
   brandId   String
   content   String
-  category  String   @default("general") // general | meeting | call | research
+  category  String   @default("general")
   pinned    Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@index([brandId])
 }
@@ -198,173 +184,151 @@ model PitchTemplate {
 }
 
 model Document {
-  id          String   @id @default(cuid())
-  brandId     String
-  type        String   // catalog | lookbook | investor_report | other
-  title       String
-  url         String
-  scrapedAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  brandId   String
+  type      String
+  title     String
+  url       String
+  scrapedAt DateTime @default(now())
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
   @@index([brandId])
 }
 
 model Integration {
-  id          String   @id @default(cuid())
-  provider    String   // salesforce | wfx
-  status      String   @default("disconnected") // connected | disconnected
+  id          String    @id @default(cuid())
+  provider    String    @unique
+  status      String    @default("disconnected")
   lastSyncAt  DateTime?
   accessToken String?
   tenantId    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@unique([provider])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
-// ─── ECOSYSTEM MAPPER ────────────────────────────────────────────────────────
 model EcosystemNode {
-  id            String   @id @default(cuid())
+  id            String                  @id @default(cuid())
   seedBrandId   String
   name          String
-  type          String   // brand, supplier, technology, logistics, investor, person, parent_company, competitor, unknown
+  type          String
   url           String?
   description   String?
-  crawlStatus   String   @default("pending") // pending | crawling | completed | failed
-  depth         Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  seedBrand     Brand    @relation(fields: [seedBrandId], references: [id], onDelete: Cascade)
-
-  // Relationships where this node is the source
-  outgoingEdges EcosystemRelationship[] @relation("SourceNode")
-  // Relationships where this node is the target
+  crawlStatus   String                  @default("pending")
+  depth         Int                     @default(0)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  seedBrand     Brand                   @relation(fields: [seedBrandId], references: [id], onDelete: Cascade)
   incomingEdges EcosystemRelationship[] @relation("TargetNode")
+  outgoingEdges EcosystemRelationship[] @relation("SourceNode")
 
-  @@index([seedBrandId])
-  // Prevent duplicate nodes for the same seed brand
   @@unique([seedBrandId, name])
+  @@index([seedBrandId])
 }
 
 model EcosystemRelationship {
-  id            String   @id @default(cuid())
-  sourceNodeId  String
-  targetNodeId  String
-  relationType  String   // manufactures_for, uses_technology, invests_in, partners_with, parent_of, competitor_of
-  evidence      String?  // Why the AI thinks they are connected
-  createdAt     DateTime @default(now())
+  id           String        @id @default(cuid())
+  sourceNodeId String
+  targetNodeId String
+  relationType String
+  evidence     String?
+  createdAt    DateTime      @default(now())
+  targetNode   EcosystemNode @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  sourceNode   EcosystemNode @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
 
-  sourceNode    EcosystemNode @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
-  targetNode    EcosystemNode @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
-
+  @@unique([sourceNodeId, targetNodeId, relationType])
   @@index([sourceNodeId])
   @@index([targetNodeId])
-  @@unique([sourceNodeId, targetNodeId, relationType])
 }
 
-// ─── COMPETITOR INTELLIGENCE ──────────────────────────────────────────────────
 model CompetitorProfile {
-  id              String   @id @default(cuid())
-  targetBrandId   String   // The Brand this company is competing against
-  name            String
-  website         String
-  industry        String?
-  
-  // Corporate Overview
-  parentCompany        String?
-  countryOfOrigin      String?
+  id                   String                  @id @default(cuid())
+  targetBrandId        String
+  name                 String
+  website              String
+  industry             String?
+  targetCustomers      String?
+  businessModel        String?
+  marketPosition       String?
+  swotStrengths        String?
+  swotWeaknesses       String?
+  swotOpps             String?
+  swotThreats          String?
+  reasoning            String?
+  depth                Int                     @default(1)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  socialLinks          String?
   city                 String?
-  state                String?
-  turnover             String?
-  storesCount          Int?
-  retailPriceMensShirt String?
+  countryOfOrigin      String?
+  parentCompany        String?
   productType          String?
+  retailPriceMensShirt String?
+  state                String?
+  storesCount          Int?
+  turnover             String?
+  gaps                 CompetitorGap[]
+  targetBrand          Brand                   @relation("BrandCompetitors", fields: [targetBrandId], references: [id], onDelete: Cascade)
+  scores               CompetitorScoreMetric[]
+  snapshots            CompetitorSnapshot[]
 
-  targetCustomers String?
-  businessModel   String?
-  marketPosition  String?
-  swotStrengths   String?  // JSON array
-  swotWeaknesses  String?  // JSON array
-  swotOpps        String?  // JSON array
-  swotThreats     String?  // JSON array
-  socialLinks     String?  // JSON array
-  reasoning       String?  // AI's explanation of why this is a competitor
-  depth           Int      @default(1) // 1 = Direct competitor, 2 = Competitor of competitor
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  targetBrand     Brand    @relation("BrandCompetitors", fields: [targetBrandId], references: [id], onDelete: Cascade)
-  scores          CompetitorScoreMetric[]
-  snapshots       CompetitorSnapshot[]
-  gaps            CompetitorGap[]
-
-  @@index([targetBrandId])
   @@unique([targetBrandId, name])
+  @@index([targetBrandId])
 }
 
 model CompetitorScoreMetric {
-  id              String   @id @default(cuid())
-  competitorId    String
-  metricName      String   // e.g. "Brand Strength", "SEO Score", "Pricing Competitiveness"
-  score           Float    // 0-100
-  evidence        String?
-  confidence      Float    @default(0.8)
-  timestamp       DateTime @default(now())
-
-  competitor      CompetitorProfile @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  id           String            @id @default(cuid())
+  competitorId String
+  metricName   String
+  score        Float
+  evidence     String?
+  confidence   Float             @default(0.8)
+  timestamp    DateTime          @default(now())
+  competitor   CompetitorProfile @relation(fields: [competitorId], references: [id], onDelete: Cascade)
 
   @@index([competitorId])
   @@index([metricName])
 }
 
 model CompetitorSnapshot {
-  id              String   @id @default(cuid())
-  competitorId    String
-  timestamp       DateTime @default(now())
-  
-  // Point-in-time data for historical tracking
-  pricingData     String?  // JSON blob of pricing tiers/strategy
-  techStack       String?  // JSON array of technologies detected
-  employeeCount   Int?
-  organicTraffic  Int?
-
-  competitor      CompetitorProfile @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  id             String            @id @default(cuid())
+  competitorId   String
+  timestamp      DateTime          @default(now())
+  pricingData    String?
+  techStack      String?
+  employeeCount  Int?
+  organicTraffic Int?
+  competitor     CompetitorProfile @relation(fields: [competitorId], references: [id], onDelete: Cascade)
 
   @@index([competitorId])
   @@index([timestamp])
 }
 
 model CompetitorGap {
-  id              String   @id @default(cuid())
-  competitorId    String
-  gapType         String   // product, pricing, seo, feature, technology
-  description     String
-  severity        String   // low, medium, high
-  opportunity     String?  // Recommended action to close the gap
-  createdAt       DateTime @default(now())
-
-  competitor      CompetitorProfile @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  id           String            @id @default(cuid())
+  competitorId String
+  gapType      String
+  description  String
+  severity     String
+  opportunity  String?
+  createdAt    DateTime          @default(now())
+  competitor   CompetitorProfile @relation(fields: [competitorId], references: [id], onDelete: Cascade)
 
   @@index([competitorId])
 }
 
-// ─── SALES INTELLIGENCE ───────────────────────────────────────────────────────
-
 model SalesOpportunity {
-  id              String   @id @default(cuid())
-  targetBrandId   String   // The Prospect Brand
-  status          String   @default("Identified") // Identified, Pitched, Won, Lost
-  expectedValue   String?
-  probability     Float?   // 0-100
-  recommendedProducts String? // JSON Array
-  recommendedServices String? // JSON Array
-  primaryGapTarget String?
-  pitchSummary    String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  brand           Brand    @relation(fields: [targetBrandId], references: [id], onDelete: Cascade)
+  id                  String   @id @default(cuid())
+  targetBrandId       String
+  status              String   @default("Identified")
+  expectedValue       String?
+  probability         Float?
+  recommendedProducts String?
+  recommendedServices String?
+  primaryGapTarget    String?
+  pitchSummary        String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  brand               Brand    @relation(fields: [targetBrandId], references: [id], onDelete: Cascade)
 
   @@index([targetBrandId])
 }
@@ -372,134 +336,116 @@ model SalesOpportunity {
 model FeedbackLoop {
   id              String   @id @default(cuid())
   targetBrandId   String?
-  interactionType String   // "Pitch", "Objection", "Outcome"
-  category        String   // "Product", "Pricing", "Sustainability", "Competitor"
+  interactionType String
+  category        String
   content         String
-  sentiment       String?  // positive, negative, neutral
+  sentiment       String?
   impactScore     Float?
   createdAt       DateTime @default(now())
-
-  brand           Brand?   @relation(fields: [targetBrandId], references: [id], onDelete: SetNull)
+  brand           Brand?   @relation(fields: [targetBrandId], references: [id])
 
   @@index([targetBrandId])
   @@index([category])
 }
 
-// ─── RELATIONSHIP GRAPH & OUTREACH ──────────────────────────────────────────
-
 model RelationshipEdge {
   id              String   @id @default(cuid())
-  sourceType      String   // Contact, Brand, Supplier, Event, InternalUser
+  sourceType      String
   sourceId        String
-  targetType      String   // Contact, Brand, Supplier, Event, InternalUser
+  targetType      String
   targetId        String
-  relationType    String   // WORKS_FOR, SUPPLIES, KNOWS, ATTENDED
-  strengthScore   Int      @default(5) // 1-10
-  confidenceScore Float    @default(0.5) // 0-1
-  evidence        String?  // Where did we find this link?
+  relationType    String
+  strengthScore   Int      @default(5)
+  confidenceScore Float    @default(0.5)
+  evidence        String?
   isVerified      Boolean  @default(false)
   createdAt       DateTime @default(now())
-
-  // Back-references for the specific Prisma relations defined in Contact
-  sourceContact   Contact? @relation("SourceEdges", fields: [sourceId], references: [id])
-  targetContact   Contact? @relation("TargetEdges", fields: [targetId], references: [id])
+  targetContact   Contact  @relation("TargetEdges", fields: [targetId], references: [id])
+  sourceContact   Contact  @relation("SourceEdges", fields: [sourceId], references: [id])
 
   @@index([sourceId, targetId])
   @@index([relationType])
 }
 
 model OutreachStrategy {
-  id              String   @id @default(cuid())
-  contactId       String   @unique
-  whyMatters      String?
-  likelyPriorities String?
-  potentialChallenges String?
-  relevantCapabilities String? // JSON Array
-  valueProposition String?
-  objections      String?  // JSON Array
-  recommendedPath String?  // Stringified path or ID
-  recommendedMessage String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  contact         Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  id                   String   @id @default(cuid())
+  contactId            String   @unique
+  whyMatters           String?
+  likelyPriorities     String?
+  potentialChallenges  String?
+  relevantCapabilities String?
+  valueProposition     String?
+  objections           String?
+  recommendedPath      String?
+  recommendedMessage   String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  contact              Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
 }
 
-// ─── ENTERPRISE IDENTITY & ACCESS MANAGEMENT (IAM) ──────────────────────────
-
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  passwordHash    String    // argon2 or bcrypt hash
-  fullName        String
-  phone           String?
-  department      String?
-  jobTitle        String?
-  officeLocation  String?
+  id                    String     @id @default(cuid())
+  email                 String     @unique
+  passwordHash          String
+  fullName              String
+  phone                 String?
+  department            String?
+  jobTitle              String?
+  officeLocation        String?
   businessJustification String?
-  managerName     String?
-  employeeId      String?
-  
-  status          String    @default("pending") // pending | approved | rejected | suspended | inactive
-  role            String    @default("Guest") // Super Administrator, System Administrator, Sales Director, etc.
-  permissions     String?   // JSON Array of granular permissions if overriding role defaults
-  
-  mfaEnabled      Boolean   @default(false)
-  mfaSecret       String?
-  
-  lastLoginAt     DateTime?
-  lastActivityAt  DateTime?
-  loginCount      Int       @default(0)
-  failedLogins    Int       @default(0)
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  sessions        Session[]
-  auditLogs       AuditLog[]
+  managerName           String?
+  employeeId            String?
+  status                String     @default("pending")
+  role                  String     @default("Guest")
+  permissions           String?
+  mfaEnabled            Boolean    @default(false)
+  mfaSecret             String?
+  lastLoginAt           DateTime?
+  lastActivityAt        DateTime?
+  loginCount            Int        @default(0)
+  failedLogins          Int        @default(0)
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  auditLogs             AuditLog[]
+  sessions              Session[]
 }
 
 model Session {
-  id              String    @id @default(cuid())
-  userId          String
-  token           String    @unique // Secure session token or refresh token
-  ipAddress       String?
-  userAgent       String?
-  device          String?
-  browser         String?
-  os              String?
-  city            String?
-  country         String?
-  
-  expiresAt       DateTime
-  lastActivityAt  DateTime  @default(now())
-  status          String    @default("active") // active | expired | revoked
-  
-  createdAt       DateTime  @default(now())
-  
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  userId         String
+  token          String   @unique
+  ipAddress      String?
+  userAgent      String?
+  device         String?
+  browser        String?
+  os             String?
+  city           String?
+  country        String?
+  expiresAt      DateTime
+  lastActivityAt DateTime @default(now())
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([token])
 }
 
 model AuditLog {
-  id              String    @id @default(cuid())
-  userId          String?
-  action          String    // e.g., "LOGIN", "APPROVE_USER", "DELETE_BRAND", "RUN_CRAWLER"
-  resource        String?   // The ID or name of the affected entity
-  resourceType    String?   // e.g., "Brand", "User", "Report"
-  previousValue   String?   // JSON
-  newValue        String?   // JSON
-  ipAddress       String?
-  device          String?
-  status          String    @default("success") // success | failure
-  reason          String?
-  riskScore       Int       @default(0) // 0-100 anomaly score
-  
-  createdAt       DateTime  @default(now())
-
-  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id            String   @id @default(cuid())
+  userId        String?
+  action        String
+  resource      String?
+  resourceType  String?
+  previousValue String?
+  newValue      String?
+  ipAddress     String?
+  device        String?
+  status        String   @default("success")
+  reason        String?
+  riskScore     Int      @default(0)
+  createdAt     DateTime @default(now())
+  user          User?    @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([action])
@@ -507,123 +453,106 @@ model AuditLog {
 }
 
 model SecurityEvent {
-  id              String    @id @default(cuid())
-  eventType       String    // e.g., "FAILED_LOGIN", "IMPOSSIBLE_TRAVEL", "BRUTE_FORCE", "NEW_DEVICE"
-  emailAttempted  String?
-  ipAddress       String?
-  userAgent       String?
-  description     String?
-  severity        String    @default("low") // low, medium, high, critical
-  resolved        Boolean   @default(false)
-  
-  createdAt       DateTime  @default(now())
+  id             String   @id @default(cuid())
+  eventType      String
+  emailAttempted String?
+  ipAddress      String?
+  userAgent      String?
+  description    String?
+  severity       String   @default("low")
+  resolved       Boolean  @default(false)
+  createdAt      DateTime @default(now())
 
   @@index([ipAddress])
   @@index([eventType])
 }
 
-// ─── SUPPLIER INTELLIGENCE ────────────────────────────────────────────────────────
-
 model SupplierProfile {
-  id                  String   @id @default(cuid())
-  targetBrandId       String
-  name                String
-  type                String   // Manufacturer, Fabric Mill, Buying Office, Logistics Provider
-  location            String?
-  website             String?
-  companyOverview     String?
-  
-  // Capabilities & Scale
-  productsManufactured String? // JSON array
-  categoriesHandled    String? // JSON array
-  manufacturingCapabilities String? // JSON array
-  fabricExpertise      String? // JSON array
-  capacity            String?
-  productionScale     String?
-  countriesServed     String? // JSON array
-  
-  // Maturity & Compliance
-  automationLevel     String?
-  digitalMaturity     String?
-  qualityCertifications String? // JSON array
-  complianceCertifications String? // JSON array
-  sustainabilityInitiatives String? // JSON array
-  esgPerformance      String?
-  
-  // Operational Metrics
-  leadTime            String?
-  speedToMarket       String?
-  moq                 String?
-  flexibility         String?
-  pricingPosition     String?
-  deliveryPerformance String?
-  
-  // Strategic Intelligence
-  customerPortfolio   String? // JSON array
-  brandReputation     String?
-  strengths           String? // JSON array
-  weaknesses          String? // JSON array
-  uniqueCapabilities  String? // JSON array
-  competitiveAdvantages String? // JSON array
-  riskFactors         String? // JSON array
-  
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                        String        @id @default(cuid())
+  targetBrandId             String
+  name                      String
+  type                      String
+  location                  String?
+  companyOverview           String?
+  productsManufactured      String?
+  categoriesHandled         String?
+  manufacturingCapabilities String?
+  fabricExpertise           String?
+  capacity                  String?
+  productionScale           String?
+  countriesServed           String?
+  automationLevel           String?
+  digitalMaturity           String?
+  qualityCertifications     String?
+  complianceCertifications  String?
+  sustainabilityInitiatives String?
+  esgPerformance            String?
+  leadTime                  String?
+  speedToMarket             String?
+  moq                       String?
+  flexibility               String?
+  pricingPosition           String?
+  deliveryPerformance       String?
+  customerPortfolio         String?
+  brandReputation           String?
+  strengths                 String?
+  weaknesses                String?
+  uniqueCapabilities        String?
+  competitiveAdvantages     String?
+  riskFactors               String?
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
+  website                   String?
+  supplierGaps              SupplierGap[]
+  brand                     Brand         @relation("BrandSuppliers", fields: [targetBrandId], references: [id], onDelete: Cascade)
+  winStrategy               WinStrategy?
 
-  brand               Brand    @relation("BrandSuppliers", fields: [targetBrandId], references: [id], onDelete: Cascade)
-  winStrategy         WinStrategy?
-  supplierGaps        SupplierGap[]
-  
-  @@index([targetBrandId])
   @@unique([targetBrandId, name])
+  @@index([targetBrandId])
 }
 
 model WinStrategy {
-  id                    String   @id @default(cuid())
-  supplierId            String   @unique
-  
-  // Strategy & Vulnerability
-  whyCustomerUsesThem   String?
-  businessValueProvided String?
-  likelyPainPoints      String?
-  vulnerabilities       String?
-  whatAquarelleDoesBetter String? // Direct comparison vs Aquarelle
-  capabilitiesToEmphasize String? // JSON array
-  capabilitiesToAvoid   String? // JSON array
-  
-  // Proposal details
-  matchingAquarelleProducts String? // JSON array
-  sustainabilityToHighlight String? // JSON array
-  expectedObjections    String? // JSON array
-  recommendedResponses  String? // JSON array
-  
-  // Execution
-  recommendedSalesStrategy String?
-  estimatedWinProbability Float? // 0-100
-  confidenceScore       Float? // 0-100
-  aiReasoning           String? // Why Aquarelle is a better fit, evidence supporting the relationship
-  
-  createdAt             DateTime @default(now())
-
-  supplier              SupplierProfile @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  id                        String          @id @default(cuid())
+  supplierId                String          @unique
+  whyCustomerUsesThem       String?
+  businessValueProvided     String?
+  likelyPainPoints          String?
+  vulnerabilities           String?
+  whatAquarelleDoesBetter   String?
+  capabilitiesToEmphasize   String?
+  capabilitiesToAvoid       String?
+  matchingAquarelleProducts String?
+  sustainabilityToHighlight String?
+  expectedObjections        String?
+  recommendedResponses      String?
+  recommendedSalesStrategy  String?
+  estimatedWinProbability   Float?
+  confidenceScore           Float?
+  aiReasoning               String?
+  createdAt                 DateTime        @default(now())
+  supplier                  SupplierProfile @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 }
 
 model SupplierGap {
-  id                    String   @id @default(cuid())
-  supplierId            String
-  gapCategory           String   // Manufacturing, Sustainability, Technology, Quality, Cost, Delivery
-  description           String
-  
-  // Gap Resolution by Aquarelle
-  canAquarelleSolveIt   Boolean  @default(true)
-  aquarelleCapability   String?
-  expectedRoi           String?
-  businessImpact        String?
-  implementationEffort  String?  // low, medium, high
-  priority              String?  // low, medium, high
-  confidence            Float?
-  
-  createdAt             DateTime @default(now())
+  id                   String          @id @default(cuid())
+  supplierId           String
+  gapCategory          String
+  description          String
+  canAquarelleSolveIt  Boolean         @default(true)
+  aquarelleCapability  String?
+  expectedRoi          String?
+  businessImpact       String?
+  implementationEffort String?
+  priority             String?
+  confidence           Float?
+  createdAt            DateTime        @default(now())
+  supplier             SupplierProfile @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+}
 
-  supplier              SupplierProfile @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  isSecret  Boolean  @default(false)
+  updatedAt DateTime @updatedAt
 }

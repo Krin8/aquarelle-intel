@@ -8,13 +8,15 @@ const STATUSES = ['all', 'discovered', 'researching', 'analyzed', 'qualified', '
 export function BrandFilters({
   currentStatus,
   currentRegion,
+  currentCountry,
   currentSearch,
-  regions,
+  countries,
 }: {
   currentStatus?: string;
   currentRegion?: string;
+  currentCountry?: string;
   currentSearch?: string;
-  regions: string[];
+  countries: string[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -61,22 +63,22 @@ export function BrandFilters({
             {status === 'all' ? 'All' : status}
           </button>
         ))}
-        {regions.length > 1 && (
+        {countries.length > 1 && (
           <>
             <span style={{ width: '1px', background: 'var(--border-subtle)', margin: '0 4px' }}></span>
             <button
-              className={`filter-chip ${!currentRegion || currentRegion === 'all' ? 'active' : ''}`}
-              onClick={() => updateFilter('region', 'all')}
+              className={`filter-chip ${!currentCountry || currentCountry === 'all' ? 'active' : ''}`}
+              onClick={() => updateFilter('country', 'all')}
             >
-              All Regions
+              All Countries
             </button>
-            {regions.map((region) => (
+            {countries.map((country) => (
               <button
-                key={region}
-                className={`filter-chip ${currentRegion === region ? 'active' : ''}`}
-                onClick={() => updateFilter('region', region)}
+                key={country}
+                className={`filter-chip ${currentCountry === country ? 'active' : ''}`}
+                onClick={() => updateFilter('country', country)}
               >
-                {region}
+                {country}
               </button>
             ))}
           </>

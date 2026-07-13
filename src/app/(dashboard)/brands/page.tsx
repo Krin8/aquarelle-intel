@@ -9,19 +9,20 @@ import { BrandGridClient } from '@/components/BrandGridClient';
 export default async function BrandsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; region?: string; search?: string; minScore?: string; hasContacts?: string }>;
+  searchParams: Promise<{ status?: string; region?: string; country?: string; search?: string; minScore?: string; hasContacts?: string }>;
 }) {
   const params = await searchParams;
   console.log('[DEBUG] BrandsPage rendering with params:', params);
   const brands = await getBrands({
     status: params.status,
     region: params.region,
+    country: params.country,
     search: params.search,
     minScore: params.minScore,
     hasContacts: params.hasContacts,
   });
 
-  const regions = [...new Set(brands.map(b => b.region))];
+  const countries = [...new Set(brands.map(b => b.countryOfOrigin).filter(Boolean))] as string[];
 
   return (
     <div>
@@ -29,7 +30,7 @@ export default async function BrandsPage({
         <div className="page-header-content">
           <h1 className="page-title">Prospect Intelligence</h1>
           <p className="page-subtitle">
-            {brands.length} brand{brands.length !== 1 ? 's' : ''} tracked across {regions.length} region{regions.length !== 1 ? 's' : ''}
+            {brands.length} brand{brands.length !== 1 ? 's' : ''} tracked across {countries.length} countr{countries.length !== 1 ? 'ies' : 'y'}
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -44,8 +45,9 @@ export default async function BrandsPage({
         <BrandFilters
           currentStatus={params.status}
           currentRegion={params.region}
+          currentCountry={params.country}
           currentSearch={params.search}
-          regions={regions}
+          countries={countries}
         />
       </Suspense>
 
@@ -54,7 +56,7 @@ export default async function BrandsPage({
           <div className="empty-state-icon">❖</div>
           <div className="empty-state-title">No brands found</div>
           <p className="empty-state-description">
-            {params.status || params.region || params.search
+            {params.status || params.region || params.country || params.search
               ? 'Try adjusting your filters.'
               : 'Add your first brand to start building market intelligence.'}
           </p>

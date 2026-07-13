@@ -29,7 +29,9 @@ function getStoreGrade(stores: number | null) {
 
 function getPriceGrade(priceStr: string | null) {
   if (!priceStr) return null;
-  const matches = priceStr.match(/\d+(\.\d+)?/g);
+  // Remove commas so 1,050 doesn't get parsed as 1 and 050
+  const cleanPriceStr = priceStr.replace(/,/g, '');
+  const matches = cleanPriceStr.match(/\d+(\.\d+)?/g);
   if (!matches) return null;
   const numbers = matches.map(Number);
   const avg = numbers.reduce((a, b) => a + b, 0) / numbers.length;

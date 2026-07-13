@@ -14,6 +14,7 @@ type BrandType = {
   website: string;
   status: string;
   region: string;
+  countryOfOrigin: string | null;
   segment: string | null;
   dataFreshness: number;
   matchScore: number | null;
@@ -150,7 +151,7 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
                 </div>
 
                 <div style={{ flex: '2', display: 'flex', gap: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>◉ {brand.region}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>◉ {brand.countryOfOrigin || 'Unknown'}</span>
                   {brand.segment && <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>◈ {brand.segment}</span>}
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>👤 {brand._count.contacts}</span>
                 </div>

@@ -76,9 +76,76 @@ Extract the company overview fields.`;
 
     if (!result) return null;
 
-    return result as ExtractedCompanyOverview;
+    console.log(`[AI:CompanyOverviewExtractor] Step 1 complete. Running Step 2 Verification for ${brandName}...`);
+    const verifiedResult = await verifyCompanyOverview(brandName, result as ExtractedCompanyOverview, searchSnippets, websiteContent);
+    return verifiedResult;
   } catch (error) {
     console.error(`[AI:CompanyOverviewExtractor] Failed to extract for ${brandName}:`, error);
     return null;
+  }
+}
+
+const VERIFIER_SYSTEM_PROMPT = `You are a ruthless B2B Data Verification Agent with access to Google Search.
+Your job is to review a previously extracted company overview against the provided source material and your own search capabilities.
+
+CRITICAL INSTRUCTIONS:
+- Scrutinize every non-null field in the "Extracted Data".
+- ANTI-HALLUCINATION: If the data is unsupported by the sources OR contradicts your highly confident internal knowledge, you MUST NOT just guess. You MUST use your search capabilities to find the actual, verifiable fact.
+- If you can find a supported fact, UPDATE the field with the correct information.
+- If you cannot find a supported fact after searching, you MUST set it to null.
+- If the data is poorly formatted (e.g., turnover is "1200000000" instead of "$1.2B", or state is "New York" instead of "NY"), you MUST fix it.
+- If the data is accurate and supported, pass it through unchanged.
+- Respond strictly with a JSON object using EXACTLY these keys:
+{
+  "parentCompany": "string | null",
+  "countryOfOrigin": "string | null",
+  "city": "string | null",
+  "state": "string | null",
+  "turnover": "string | null",
+  "storesCount": "number | null",
+  "retailPriceMensShirt": "string | null",
+  "productType": "string | null"
+}
+No markdown fences, no summary text.`;
+
+export async function verifyCompanyOverview(
+  brandName: string,
+  initialData: ExtractedCompanyOverview,
+  searchSnippets: string,
+  websiteContent: string
+): Promise<ExtractedCompanyOverview> {
+  const userPrompt = `Brand Name: ${brandName}
+
+Extracted Data to Verify:
+${JSON.stringify(initialData, null, 2)}
+
+Search Results Snippets:
+${searchSnippets || "None provided."}
+
+Website Content Snippet:
+${websiteContent.slice(0, 3000) || "None provided."}
+
+Verify the extracted data. Fix formatting issues and nullify any unsupported/hallucinated facts. Return the corrected JSON.`;
+
+  try {
+    const { result } = await generateStructuredResponse<ExtractedCompanyOverview>(
+      VERIFIER_SYSTEM_PROMPT,
+      userPrompt,
+      (text) => {
+        const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+        const parsed = JSON.parse(cleaned);
+        return AICompanyOverviewSchema.parse(parsed);
+      },
+      true
+    );
+    
+    if (result) {
+      console.log(`[AI:CompanyOverviewVerifier] Verification complete for ${brandName}.`);
+      return result as ExtractedCompanyOverview;
+    }
+    return initialData;
+  } catch (error) {
+    console.error(`[AI:CompanyOverviewVerifier] Failed to verify for ${brandName}, falling back to initial data:`, error);
+    return initialData;
   }
 }

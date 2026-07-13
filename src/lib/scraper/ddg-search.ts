@@ -1,8 +1,6 @@
-import puppeteer from 'puppeteer-extra';
 import { Browser } from 'puppeteer';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { launchBrowser } from "@/lib/browser";
 
-puppeteer.use(StealthPlugin());
 
 export interface SearchResult {
   title: string;
@@ -15,11 +13,8 @@ export async function runDuckDuckGoSearch(query: string, existingBrowser?: Brows
   let browserCreatedHere = false;
 
   try {
-    if (!browser) {
-      browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-      });
+    if (!browser || !browser.connected) {
+      browser = await launchBrowser();
       browserCreatedHere = true;
     }
 
@@ -28,16 +23,30 @@ export async function runDuckDuckGoSearch(query: string, existingBrowser?: Brows
     
     await page.goto(`https://duckduckgo.com/html/?q=${encodedQuery}`, { waitUntil: 'domcontentloaded' });
     
-    await page.waitForSelector('.result', { timeout: 10000 }).catch(() => null);
+    let allResults: SearchResult[] = [];
     
-    const searchResults = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('.result')).slice(0, 300).map((el: any) => {
-        const title = el.querySelector('.result__title')?.innerText || '';
-        const snippet = el.querySelector('.result__snippet')?.innerText || '';
-        const url = el.querySelector('.result__url')?.innerText || '';
-        return { title, snippet, url };
+    for (let pageNum = 0; pageNum < 5; pageNum++) {
+      await page.waitForSelector('.result', { timeout: 10000 }).catch(() => null);
+      
+      const pageResults = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('.result')).slice(0, 300).map((el: any) => {
+          const title = el.querySelector('.result__title')?.innerText || '';
+          const snippet = el.querySelector('.result__snippet')?.innerText || '';
+          const url = el.querySelector('.result__url')?.innerText || '';
+          return { title, snippet, url };
+        });
       });
-    });
+      
+      allResults = [...allResults, ...pageResults];
+      
+      const hasNext = await page.evaluate(() => !!document.querySelector('input[value="Next"]'));
+      if (!hasNext || pageNum === 4) break;
+      
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => null),
+        page.click('input[value="Next"]')
+      ]);
+    }
 
     await page.close();
     
@@ -45,7 +54,7 @@ export async function runDuckDuckGoSearch(query: string, existingBrowser?: Brows
       await browser.close();
     }
 
-    return searchResults;
+    return allResults;
   } catch (error) {
     console.warn(`[DDGSearch] Exception during search for "${query}":`, error);
     if (browserCreatedHere && browser) {

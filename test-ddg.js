@@ -16,8 +16,10 @@ puppeteer.use(StealthPlugin());
     ],
   });
   const page = await browser.newPage();
-  await page.goto('https://www.g-star.com', { waitUntil: 'networkidle2' });
+  await page.goto('https://duckduckgo.com/html/?q=test', { waitUntil: 'domcontentloaded' });
   const html = await page.content();
-  console.log(html.includes('Choose store') ? 'INTERSTITIAL' : 'SUCCESS');
+  const fs = require('fs');
+  fs.writeFileSync('ddg-page.html', html);
   await browser.close();
+  console.log("Done");
 })();

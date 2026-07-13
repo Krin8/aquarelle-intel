@@ -159,6 +159,7 @@ export async function deleteBrands(brandIds: string[]) {
 export async function getBrands(filters?: {
   status?: string;
   region?: string;
+  country?: string;
   search?: string;
   minScore?: string;
   hasContacts?: string;
@@ -171,6 +172,9 @@ export async function getBrands(filters?: {
   }
   if (filters?.region && filters.region !== 'all') {
     where.region = filters.region;
+  }
+  if (filters?.country && filters.country !== 'all') {
+    where.countryOfOrigin = filters.country;
   }
   if (filters?.search) {
     where.OR = [

@@ -1,12 +1,10 @@
 'use server';
 
 import prisma from '@/lib/db';
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { scrapeDeepDetails, analyzeCompetitorProfile } from '@/lib/scraper/competitor-crawler';
 import { runAllSearches } from '@/lib/scraper/search-orchestrator';
+import { launchBrowser } from "@/lib/browser";
 
-puppeteer.use(StealthPlugin());
 
 export async function scrapeCompetitorBrandAction(competitorId: string) {
   const competitor = await prisma.competitorProfile.findUnique({
@@ -20,11 +18,7 @@ export async function scrapeCompetitorBrandAction(competitorId: string) {
 
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: false,
-      userDataDir: './.puppeteer_data',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+    browser = await launchBrowser();
 
     console.log(`[CompetitorScrape] Deep crawling: ${competitor.name} -> ${competitor.website}`);
     

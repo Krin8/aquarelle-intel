@@ -1,4 +1,5 @@
 import { SettingsClient } from '@/components/SettingsClient';
+import { ApiKeysSettingsClient } from '@/components/ApiKeysSettingsClient';
 import { getPitchTemplates } from '@/actions/pitch-actions';
 
 export default async function SettingsPage() {
@@ -13,6 +14,7 @@ export default async function SettingsPage() {
         </div>
       </div>
       <SettingsClient initialTemplates={templates} />
+      <ApiKeysSettingsClient />
     </div>
   );
 }

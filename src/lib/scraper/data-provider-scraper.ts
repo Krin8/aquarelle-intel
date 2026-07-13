@@ -1,19 +1,13 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { generateStructuredResponse } from '../ai/router';
 import { URL } from 'url';
 import { ScrapedContact } from './index';
+import { launchBrowser } from "@/lib/browser";
 
-puppeteer.use(StealthPlugin());
 
 export async function scrapeDataProvider(brandName: string, website: string): Promise<{ success: boolean; contacts: ScrapedContact[]; error?: string }> {
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      userDataDir: './.puppeteer_data',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+    browser = await launchBrowser();
     
     let retailHostname = '';
     try {

@@ -1,11 +1,9 @@
 import prisma from '@/lib/db';
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { generateStructuredResponse } from '@/lib/ai/router';
 import { analyzeSupplier } from '@/lib/ai/analyzers/supplier-analyzer';
 import { runAllSearches } from './search-orchestrator';
+import { launchBrowser } from "@/lib/browser";
 
-puppeteer.use(StealthPlugin());
 
 interface SupplierCrawlSettings {
   maxSuppliersPerScan: number;
@@ -26,11 +24,7 @@ async function processSupplierQueue(targetBrandId: string, targetBrandName: stri
 
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      userDataDir: './.puppeteer_data',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+    browser = await launchBrowser();
 
     const queries = [
       `${targetBrandName} public supplier list`,

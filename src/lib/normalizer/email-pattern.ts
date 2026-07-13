@@ -1,3 +1,5 @@
+import { getApiKey } from '@/lib/settings';
+
 export function deriveEmailPattern(firstName: string, lastName: string, email: string): string {
   const [local] = email.toLowerCase().split('@');
   const f = firstName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
@@ -45,7 +47,7 @@ export function generateEmail(firstName: string, lastName: string, domain: strin
 }
 
 export async function findDomainPatternWithHunter(domain: string): Promise<string> {
-  const hunterKey = process.env.HUNTER_API_KEY;
+  const hunterKey = await getApiKey('HUNTER');
   if (!hunterKey) return 'unknown';
 
   try {
@@ -62,7 +64,7 @@ export async function findDomainPatternWithHunter(domain: string): Promise<strin
   return 'unknown';
 }
 export async function findDomainAndPatternWithHunter(companyName: string): Promise<{ domain: string | null; pattern: string | null }> {
-  const hunterKey = process.env.HUNTER_API_KEY;
+  const hunterKey = await getApiKey('HUNTER');
   if (!hunterKey) return { domain: null, pattern: null };
 
   try {
@@ -108,7 +110,7 @@ export async function findRobustDomainPattern(domain: string, samplePersons: Arr
       
 
     // --- FINDYMAIL FALLBACK ---
-    const findymailKey = process.env.FINDYMAIL_API_KEY;
+    const findymailKey = await getApiKey('FINDYMAIL');
     if (findymailKey) {
       try {
         const findyRes = await fetch('https://app.findymail.com/api/search/name', {
@@ -130,7 +132,7 @@ export async function findRobustDomainPattern(domain: string, samplePersons: Arr
     }
 
     // --- DROPCONTACT FALLBACK ---
-    const dcKey = process.env.DROPCONTACT_API_KEY;
+    const dcKey = await getApiKey('DROPCONTACT');
     if (dcKey) {
       try {
         const dcRes = await fetch('https://api.dropcontact.com/v1/enrich/all', {
@@ -153,7 +155,7 @@ export async function findRobustDomainPattern(domain: string, samplePersons: Arr
     }
 
     // --- PDL FALLBACK ---
-    const pdlKey = process.env.PDL_API_KEY;
+    const pdlKey = await getApiKey('PDL');
     if (pdlKey) {
       try {
         const pdlRes = await fetch('https://api.peopledatalabs.com/v5/person/enrich', {
@@ -175,7 +177,7 @@ export async function findRobustDomainPattern(domain: string, samplePersons: Arr
     }
 
     // --- PROSPEO FALLBACK ---
-    const prospeoKey = process.env.PROSPEO_API_KEY;
+    const prospeoKey = await getApiKey('PROSPEO');
     if (prospeoKey) {
       try {
         const prospeoRes = await fetch('https://api.prospeo.io/email-finder', {
@@ -197,7 +199,7 @@ export async function findRobustDomainPattern(domain: string, samplePersons: Arr
     }
 
     // --- HUNTER.IO FALLBACK ---
-      const hunterKey = process.env.HUNTER_API_KEY;
+      const hunterKey = await getApiKey('HUNTER');
       if (hunterKey) {
         try {
           const hunterRes = await fetch(`https://api.hunter.io/v2/email-finder?domain=${testDomain}&first_name=${encodeURIComponent(samplePerson.firstName)}&last_name=${encodeURIComponent(samplePerson.lastName)}&api_key=${hunterKey}`);

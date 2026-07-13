@@ -11,8 +11,8 @@ const navItems = [
       { href: '/brands', label: 'Prospect Intelligence', icon: '❖' },
       { href: '/intelligence', label: 'AI Insights', icon: '✦' },
       { href: '/analytics', label: 'Analytics', icon: '📊' },
-      { href: '/regions', label: 'Regions', icon: '◉' },
-      { href: '/regions/scan', label: 'Region Scan', icon: '🔍' },
+      { href: '/regions', label: 'Countries', icon: '◉' },
+      { href: '/regions/scan', label: 'Country Scan', icon: '🔍' },
     ],
   },
   {

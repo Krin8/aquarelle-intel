@@ -4,7 +4,7 @@ import { findDomainAndPatternWithHunter, findRobustDomainPattern } from './src/l
 const prisma = new PrismaClient();
 
 async function test() {
-  const brand = await prisma.brand.findUnique({ where: { name: 'American Eagle Outfitters, Inc.' } });
+  const brand = await prisma.brand.findFirst({ where: { name: 'American Eagle Outfitters, Inc.' } });
   if (!brand) return console.log('Brand not found');
   
   let { domain: hunterDomain, pattern: hunterPattern } = await findDomainAndPatternWithHunter(brand.name);
@@ -31,7 +31,7 @@ async function test() {
         lastName: 'Schottenstein'
       };
       console.log('Trying robust pattern for:', hunterDomain);
-      hunterPattern = await findRobustDomainPattern(hunterDomain, samplePerson);
+      hunterPattern = (await findRobustDomainPattern(hunterDomain, [samplePerson])).pattern;
     }
   }
   

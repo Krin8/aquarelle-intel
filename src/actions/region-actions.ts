@@ -68,6 +68,11 @@ export async function startRegionScan(region: string, maxBrands: number = 20, ta
       const { discoverBrandsInRegion } = await import('@/lib/scraper/region-discovery');
       const discovered = await discoverBrandsInRegion(region, maxBrands, targetCountry, category);
 
+      if (globalThis.regionScanProgress && !globalThis.regionScanProgress.isScanning) {
+        console.log('[RegionScan] Scan cancelled during discovery phase, stopping.');
+        return;
+      }
+
       if (discovered.length === 0) {
         if (globalThis.regionScanProgress) {
           globalThis.regionScanProgress.phase = 'error';
@@ -237,7 +242,7 @@ async function processSingleBrand(brand: DiscoveredBrand, region: string) {
   updateStep('scraping');
   console.log(`[RegionScan] Scraping ${brand.name}...`);
   const { scrapeBrand } = await import('@/actions/scrape-actions');
-  const scrapeResult = await scrapeBrand(brandId);
+  const scrapeResult = await scrapeBrand(brandId, { target: 'overview' });
   if (scrapeResult.error) {
     console.warn(`[RegionScan] Scrape failed for ${brand.name}: ${scrapeResult.error}`);
     // Continue anyway — some analysis steps may still work with what we have

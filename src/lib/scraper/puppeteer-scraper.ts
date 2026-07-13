@@ -1,5 +1,3 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import type { Page } from 'puppeteer';
 import * as cheerio from 'cheerio';
 import type { ScrapedContent } from './static-scraper';
@@ -7,8 +5,8 @@ import { findShirtCategoryLinks } from './category-finder';
 
 // We share the same Turndown configuration and logic, so we extract it or just duplicate the conversion for now
 import TurndownService from 'turndown';
+import { launchBrowser } from "@/lib/browser";
 
-puppeteer.use(StealthPlugin());
 
 const turndown = new TurndownService({
   headingStyle: 'atx',
@@ -269,11 +267,7 @@ async function extractPageData(page: Page, url: string, isSubpage: boolean = fal
 }
 
 export async function scrapeWithPuppeteer(mainUrl: string, target: string = 'all'): Promise<ScrapedContent> {
-  const browser = await puppeteer.launch({
-      headless: true,
-      userDataDir: './.puppeteer_data',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();

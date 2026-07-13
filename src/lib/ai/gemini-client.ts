@@ -1,17 +1,22 @@
 import { GoogleGenAI } from '@google/genai';
+import { getApiKey } from '@/lib/settings';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // We'll use gemini-2.5-flash as the default model since it's fast and highly capable for these tasks
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 let geminiInstance: GoogleGenAI | null = null;
+let lastKeyUsed: string | null = null;
 
-export function getGemini(): GoogleGenAI {
-  if (!geminiInstance) {
-    if (!GEMINI_API_KEY) {
-      throw new Error('GEMINI_API_KEY is not set in environment variables');
-    }
-    geminiInstance = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+export async function getGemini(): Promise<GoogleGenAI> {
+  const apiKey = await getApiKey('GEMINI');
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY is not configured in settings');
+  }
+
+  // Re-initialize if key changed (or if it's the first time)
+  if (!geminiInstance || lastKeyUsed !== apiKey) {
+    geminiInstance = new GoogleGenAI({ apiKey });
+    lastKeyUsed = apiKey;
   }
   return geminiInstance;
 }
@@ -23,7 +28,7 @@ export async function checkGeminiHealth(): Promise<{
 }> {
   try {
     // A simple prompt to check if the API is reachable and key is valid
-    const ai = getGemini();
+    const ai = await getGemini();
     await ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: 'ping',
@@ -74,7 +79,7 @@ export async function generateStructuredResponse<T>(
   parseResponse: (text: string) => T,
   useGoogleSearch?: boolean
 ): Promise<{ result: T; rawResponse: string; model: string }> {
-  const ai = getGemini();
+  const ai = await getGemini();
 
   const response = await withRetry(() => ai.models.generateContent({
     model: GEMINI_MODEL,
@@ -114,7 +119,7 @@ export async function generateTextResponse(
   systemPrompt: string,
   userPrompt: string
 ): Promise<{ text: string; model: string }> {
-  const ai = getGemini();
+  const ai = await getGemini();
 
   const response = await withRetry(() => ai.models.generateContent({
     model: GEMINI_MODEL,

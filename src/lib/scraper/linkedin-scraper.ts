@@ -1,19 +1,14 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { generateStructuredResponse } from '../ai/router';
 import { URL } from 'url';
 import { ScrapedContact } from './index';
+import { getApiKey } from '@/lib/settings';
+import { launchBrowser } from "@/lib/browser";
 
-puppeteer.use(StealthPlugin());
 
 export async function scrapeLinkedinEmployees(brandName: string, website: string): Promise<{ success: boolean; contacts: ScrapedContact[]; error?: string }> {
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      userDataDir: './.puppeteer_data',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+    browser = await launchBrowser();
     
     let retailHostname = '';
     try {
@@ -173,9 +168,10 @@ Now extract from the actual search results above and respond with the JSON only.
         let confidence = 70; // lowered because email is always a guess
         let source_url = c.linkedinUrl || 'linkedin';
 
-        if (c.email && process.env.HUNTER_API_KEY) {
+        const hunterKey = await getApiKey('HUNTER');
+        if (c.email && hunterKey) {
           try {
-            const res = await fetch(`https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(c.email)}&api_key=${process.env.HUNTER_API_KEY}`);
+            const res = await fetch(`https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(c.email)}&api_key=${hunterKey}`);
             if (res.ok) {
               const data = await res.json();
               if (data?.data?.status === 'valid') {

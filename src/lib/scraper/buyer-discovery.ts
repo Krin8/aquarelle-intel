@@ -1,11 +1,9 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { generateStructuredResponse } from '../ai/router';
 import { getAquarelleContextString } from '../knowledge/aquarelle-kb';
 import prisma from '../db';
 import { URL } from 'url';
+import { launchBrowser } from "@/lib/browser";
 
-puppeteer.use(StealthPlugin());
 
 export async function discoverBuyersAndRelationships(brandId: string) {
   const brand = await prisma.brand.findUnique({ where: { id: brandId } });
@@ -26,10 +24,7 @@ export async function discoverBuyersAndRelationships(brandId: string) {
   let searchResults: any[] = [];
   
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+    browser = await launchBrowser();
     
     const page = await browser.newPage();
     

@@ -1,10 +1,8 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { generateStructuredResponse } from '../ai/router';
 import { URL } from 'url';
+import { launchBrowser } from "@/lib/browser";
 
 // Use stealth to avoid DDG blocks
-puppeteer.use(StealthPlugin());
 
 /**
  * Automatically searches for and extracts the corporate/parent website 
@@ -13,10 +11,7 @@ puppeteer.use(StealthPlugin());
 export async function findCorporateUrl(brandName: string, retailUrl: string): Promise<string | null> {
   let browser;
   try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+    browser = await launchBrowser();
     
     let retailHostname = '';
     try {

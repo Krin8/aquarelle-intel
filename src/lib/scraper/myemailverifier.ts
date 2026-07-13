@@ -1,3 +1,5 @@
+import { getApiKey } from '@/lib/settings';
+
 export type VerificationStatus = 'valid' | 'catch-all' | 'invalid' | 'unverified';
 
 export interface VerificationResult {
@@ -14,7 +16,7 @@ export async function verifyEmail(email: string): Promise<VerificationResult> {
     return CACHE.get(normalizedEmail)!;
   }
 
-  const apiKey = process.env.MEV_API_KEY;
+  const apiKey = await getApiKey('MEV');
   if (!apiKey) {
     console.warn('[MyEmailVerifier] MEV_API_KEY is not set. Marking email as unverified.');
     return { status: 'unverified', rawResult: { error: 'Missing API key' } };
