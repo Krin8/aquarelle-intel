@@ -3,7 +3,7 @@ import { GEMINI_MODEL, getGemini } from './gemini-client';
 
 export async function runAiSearch(query: string): Promise<{ title: string; snippet: string; url: string }[]> {
   try {
-    const ai = getGemini();
+    const ai = await getGemini();
     const prompt = `Perform a Google Search for the following query: "${query}"
 Extract the top 5 most relevant results.
 Return ONLY a valid JSON array of objects, with no markdown formatting or backticks.
