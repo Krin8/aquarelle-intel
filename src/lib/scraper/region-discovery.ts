@@ -68,26 +68,33 @@ export async function discoverBrandsInRegion(
             let page: any;
             try {
               if (!browser.connected) return;
-              page = await browser.newPage();
-              const targetUrl = result.url.startsWith('http') ? result.url : `https://${result.url}`;
-              await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
+              
+              // Wrap the entire tab lifecycle in a hard timeout to prevent indefinite hangs
+              await Promise.race([
+                (async () => {
+                  page = await browser.newPage();
+                  const targetUrl = result.url.startsWith('http') ? result.url : `https://${result.url}`;
+                  await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
 
-              const scrapeData = await page.evaluate(() => {
-                const text = document.body.innerText.substring(0, 6000);
-                const links = Array.from(document.querySelectorAll('a'))
-                  .map(a => a.href)
-                  .filter(href => href.startsWith('http') && !href.includes(window.location.hostname))
-                  .filter(href => !href.includes('facebook.com') && !href.includes('instagram.com') && !href.includes('twitter.com') && !href.includes('linkedin.com') && !href.includes('pinterest.com'));
-                const uniqueLinks = [...new Set(links)].slice(0, 40);
-                return { text, uniqueLinks };
-              });
+                  const scrapeData = await page.evaluate(() => {
+                    const text = document.body.innerText.substring(0, 6000);
+                    const links = Array.from(document.querySelectorAll('a'))
+                      .map(a => a.href)
+                      .filter(href => href.startsWith('http') && !href.includes(window.location.hostname))
+                      .filter(href => !href.includes('facebook.com') && !href.includes('instagram.com') && !href.includes('twitter.com') && !href.includes('linkedin.com') && !href.includes('pinterest.com'));
+                    const uniqueLinks = [...new Set(links)].slice(0, 40);
+                    return { text, uniqueLinks };
+                  });
 
-              if (scrapeData.text && scrapeData.text.trim().length > 0) {
-                result.snippet += "\n[WEBSITE PREVIEW]: " + scrapeData.text.replace(/\n+/g, ' ');
-              }
-              if (scrapeData.uniqueLinks.length > 0) {
-                result.snippet += "\n[EXTERNAL LINKS DETECTED]: " + scrapeData.uniqueLinks.join(', ');
-              }
+                  if (scrapeData.text && scrapeData.text.trim().length > 0) {
+                    result.snippet += "\n[WEBSITE PREVIEW]: " + scrapeData.text.replace(/\n+/g, ' ');
+                  }
+                  if (scrapeData.uniqueLinks.length > 0) {
+                    result.snippet += "\n[EXTERNAL LINKS DETECTED]: " + scrapeData.uniqueLinks.join(', ');
+                  }
+                })(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Enrichment hard timeout')), 15000))
+              ]);
             } catch (scrapeErr) {
               console.warn(`[RegionDiscovery] Failed to preview ${result.url} for enrichment.`);
             } finally {
