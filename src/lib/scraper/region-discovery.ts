@@ -20,7 +20,7 @@ export async function discoverBrandsInRegion(
   targetCountry?: string,
   category?: string
 ): Promise<DiscoveredBrand[]> {
-  let browser;
+  let browser: any;
   let allSearchResults: { title: string; snippet: string; url: string }[] = [];
   try {
     browser = await launchBrowser();
