@@ -63,9 +63,10 @@ export async function discoverBrandsInRegion(
             console.log('[RegionDiscovery] Scan cancelled, stopping deep scrape loop.');
             break;
           }
+          let page: any;
           try {
             if (browser && browser.connected) {
-              const page = await browser.newPage();
+              page = await browser.newPage();
               const targetUrl = results[i].url.startsWith('http') ? results[i].url : `https://${results[i].url}`;
               await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
               
@@ -85,11 +86,13 @@ export async function discoverBrandsInRegion(
               if (scrapeData.uniqueLinks.length > 0) {
                 results[i].snippet += "\n[EXTERNAL LINKS DETECTED]: " + scrapeData.uniqueLinks.join(', ');
               }
-              
-              await page.close();
             }
           } catch (scrapeErr) {
             console.warn(`[RegionDiscovery] Failed to preview ${results[i].url} for enrichment.`);
+          } finally {
+            if (page && !page.isClosed()) {
+              await page.close().catch(() => {});
+            }
           }
         }
         // ------------------------------
@@ -161,18 +164,18 @@ async function verifyDiscoveredBrands(
     const batch = brands.slice(i, i + BATCH_SIZE);
     
     const batchPromises = batch.map(async (brand) => {
+      let page: any;
       try {
         if (!browser.connected) {
           console.warn('[Verification] Browser disconnected. Falling back for this brand.');
           return brand; 
         }
         
-        const page = await browser.newPage();
+        page = await browser.newPage();
         const targetUrl = brand.website.startsWith('http') ? brand.website : `https://${brand.website}`;
         
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
         const websiteText = await page.evaluate(() => document.body.innerText.substring(0, 6000));
-        await page.close();
         
         const systemPrompt = `You are a strict brand verification AI. 
 Analyze the website text of "${brand.name}".
@@ -206,6 +209,10 @@ Output JSON: { "is_valid": true, "reason": "brief reason why" } or { "is_valid":
       } catch (err) {
         console.warn(`[Verification] Scrape failed for ${brand.name}, keeping as fallback.`);
         return brand; 
+      } finally {
+        if (page && !page.isClosed()) {
+          await page.close().catch(() => {});
+        }
       }
     });
     
