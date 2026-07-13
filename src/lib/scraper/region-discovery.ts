@@ -56,42 +56,47 @@ export async function discoverBrandsInRegion(
         
         const results = await runAllSearches(browser, query);
         
-        // --- DEEP SCRAPE ENRICHMENT ---
-        // Scrape the first 30 websites for richer context
-        for (let i = 0; i < Math.min(30, results.length); i++) {
-          if ((globalThis as any).regionScanProgress && !(globalThis as any).regionScanProgress.isScanning) {
-            console.log('[RegionDiscovery] Scan cancelled, stopping deep scrape loop.');
-            break;
-          }
-          let page: any;
-          try {
-            if (browser && browser.connected) {
-              page = await browser.newPage();
-              const targetUrl = results[i].url.startsWith('http') ? results[i].url : `https://${results[i].url}`;
-              await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
-              
-              const scrapeData = await page.evaluate(() => {
-                const text = document.body.innerText.substring(0, 6000);
-                const links = Array.from(document.querySelectorAll('a'))
-                  .map(a => a.href)
-                  .filter(href => href.startsWith('http') && !href.includes(window.location.hostname))
-                  .filter(href => !href.includes('facebook.com') && !href.includes('instagram.com') && !href.includes('twitter.com') && !href.includes('linkedin.com') && !href.includes('pinterest.com'));
-                const uniqueLinks = [...new Set(links)].slice(0, 40);
-                return { text, uniqueLinks };
-              });
-              
-              if (scrapeData.text && scrapeData.text.trim().length > 0) {
-                results[i].snippet += "\n[WEBSITE PREVIEW]: " + scrapeData.text.replace(/\n+/g, ' ');
-              }
-              if (scrapeData.uniqueLinks.length > 0) {
-                results[i].snippet += "\n[EXTERNAL LINKS DETECTED]: " + scrapeData.uniqueLinks.join(', ');
-              }
-            }
-          } catch (scrapeErr) {
-            console.warn(`[RegionDiscovery] Failed to preview ${results[i].url} for enrichment.`);
-          } finally {
-            if (page && !page.isClosed()) {
-              await page.close().catch(() => {});
+        // --- DEEP SCRAPE ENRICHMENT (lightweight) ---
+        // Only enrich the first 5 results to avoid crashing Chrome on low-memory servers
+        const ENRICH_LIMIT = 5;
+        if (browser && browser.connected) {
+          for (let i = 0; i < Math.min(ENRICH_LIMIT, results.length); i++) {
+            if ((globalThis as any).regionScanProgress && !(globalThis as any).regionScanProgress.isScanning) break;
+            // If browser crashed during enrichment, skip remaining — don't relaunch just for enrichment
+            if (!browser.connected) break;
+            
+            let page: any;
+            try {
+              // Race: scrape vs 12s hard timeout to prevent indefinite hangs
+              await Promise.race([
+                (async () => {
+                  page = await browser.newPage();
+                  const targetUrl = results[i].url.startsWith('http') ? results[i].url : `https://${results[i].url}`;
+                  await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 8000 });
+                  
+                  const scrapeData = await page.evaluate(() => {
+                    const text = document.body.innerText.substring(0, 4000);
+                    const links = Array.from(document.querySelectorAll('a'))
+                      .map(a => a.href)
+                      .filter(href => href.startsWith('http') && !href.includes(window.location.hostname))
+                      .filter(href => !href.includes('facebook.com') && !href.includes('instagram.com') && !href.includes('twitter.com') && !href.includes('linkedin.com') && !href.includes('pinterest.com'));
+                    const uniqueLinks = [...new Set(links)].slice(0, 20);
+                    return { text, uniqueLinks };
+                  });
+                  
+                  if (scrapeData.text && scrapeData.text.trim().length > 0) {
+                    results[i].snippet += "\n[WEBSITE PREVIEW]: " + scrapeData.text.replace(/\n+/g, ' ');
+                  }
+                  if (scrapeData.uniqueLinks.length > 0) {
+                    results[i].snippet += "\n[EXTERNAL LINKS DETECTED]: " + scrapeData.uniqueLinks.join(', ');
+                  }
+                })(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Enrichment timeout')), 12000))
+              ]);
+            } catch (scrapeErr) {
+              // Silently skip — search snippet is usually enough
+            } finally {
+              try { if (page && !page.isClosed()) await page.close().catch(() => {}); } catch {}
             }
           }
         }
