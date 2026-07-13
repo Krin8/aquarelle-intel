@@ -1,6 +1,7 @@
 import { generateStructuredResponse } from '../ai/router';
 import { runAllSearches } from './search-orchestrator';
 import { launchBrowser } from "@/lib/browser";
+import * as cheerio from 'cheerio';
 
 
 export interface DiscoveredBrand {
@@ -30,17 +31,17 @@ export async function discoverBrandsInRegion(
     const industrySources = await discoverIndustrySources(browser, region, targetCountry);
     console.log(`[RegionDiscovery] Found ${industrySources.length} sources:`, industrySources);
 
-  // ─── STEP 2: Generate targeted search queries ─────────────────────────────
-  const searchQueries = buildSearchQueries(region, maxBrands, industrySources, targetCountry);
-  console.log(`[RegionDiscovery] Phase 2: Starting brand discovery with ${searchQueries.length} queries (max ${maxBrands} brands)`);
-  
-  // Update global progress state if it exists
-  if ((globalThis as any).regionScanProgress) {
-    (globalThis as any).regionScanProgress.phase = 'discovering';
-    (globalThis as any).regionScanProgress.currentBrand = 'Searching Brands...';
-  }
+    // ─── STEP 2: Generate targeted search queries ─────────────────────────────
+    const searchQueries = buildSearchQueries(region, maxBrands, industrySources, targetCountry);
+    console.log(`[RegionDiscovery] Phase 2: Starting brand discovery with ${searchQueries.length} queries (max ${maxBrands} brands)`);
 
-  // ─── STEP 2: Run searches via AI Search and DDG ──────────────────────────
+    // Update global progress state if it exists
+    if ((globalThis as any).regionScanProgress) {
+      (globalThis as any).regionScanProgress.phase = 'discovering';
+      (globalThis as any).regionScanProgress.currentBrand = 'Searching Brands...';
+    }
+
+    // ─── STEP 2: Run searches via AI Search and DDG ──────────────────────────
 
     for (const query of searchQueries) {
       if ((globalThis as any).regionScanProgress && !(globalThis as any).regionScanProgress.isScanning) {
@@ -53,55 +54,64 @@ export async function discoverBrandsInRegion(
           console.warn('[RegionDiscovery] Browser disconnected. Relaunching...');
           browser = await launchBrowser();
         }
-        
+
         const results = await runAllSearches(browser, query);
-        
-        // --- DEEP SCRAPE ENRICHMENT (lightweight) ---
-        // Only enrich the first 5 results to avoid crashing Chrome on low-memory servers
-        const ENRICH_LIMIT = 5;
-        if (browser && browser.connected) {
-          for (let i = 0; i < Math.min(ENRICH_LIMIT, results.length); i++) {
-            if ((globalThis as any).regionScanProgress && !(globalThis as any).regionScanProgress.isScanning) break;
-            // If browser crashed during enrichment, skip remaining — don't relaunch just for enrichment
-            if (!browser.connected) break;
-            
-            let page: any;
-            try {
-              // Race: scrape vs 12s hard timeout to prevent indefinite hangs
-              await Promise.race([
-                (async () => {
-                  page = await browser.newPage();
-                  const targetUrl = results[i].url.startsWith('http') ? results[i].url : `https://${results[i].url}`;
-                  await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 8000 });
-                  
-                  const scrapeData = await page.evaluate(() => {
-                    const text = document.body.innerText.substring(0, 4000);
-                    const links = Array.from(document.querySelectorAll('a'))
-                      .map(a => a.href)
-                      .filter(href => href.startsWith('http') && !href.includes(window.location.hostname))
-                      .filter(href => !href.includes('facebook.com') && !href.includes('instagram.com') && !href.includes('twitter.com') && !href.includes('linkedin.com') && !href.includes('pinterest.com'));
-                    const uniqueLinks = [...new Set(links)].slice(0, 20);
-                    return { text, uniqueLinks };
-                  });
-                  
-                  if (scrapeData.text && scrapeData.text.trim().length > 0) {
-                    results[i].snippet += "\n[WEBSITE PREVIEW]: " + scrapeData.text.replace(/\n+/g, ' ');
-                  }
-                  if (scrapeData.uniqueLinks.length > 0) {
-                    results[i].snippet += "\n[EXTERNAL LINKS DETECTED]: " + scrapeData.uniqueLinks.join(', ');
-                  }
-                })(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Enrichment timeout')), 12000))
-              ]);
-            } catch (scrapeErr) {
-              // Silently skip — search snippet is usually enough
-            } finally {
-              try { if (page && !page.isClosed()) await page.close().catch(() => {}); } catch {}
+
+        // --- DEEP SCRAPE ENRICHMENT (fetch + cheerio, no browser) ---
+        // Enrich the first 30 results using lightweight HTTP fetch instead of Puppeteer
+        const enrichPromises = results.slice(0, 30).map(async (result, i) => {
+          try {
+            const targetUrl = result.url.startsWith('http') ? result.url : `https://${result.url}`;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+
+            const resp = await fetch(targetUrl, {
+              signal: controller.signal,
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html',
+              },
+              redirect: 'follow',
+            });
+            clearTimeout(timeout);
+
+            if (!resp.ok) return;
+            const html = await resp.text();
+            const $ = cheerio.load(html);
+
+            // Remove script/style tags for cleaner text
+            $('script, style, noscript, svg, iframe').remove();
+            const text = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 6000);
+
+            // Extract external links
+            const pageHost = new URL(targetUrl).hostname;
+            const links: string[] = [];
+            $('a[href^="http"]').each((_, el) => {
+              const href = $(el).attr('href');
+              if (!href) return;
+              try {
+                const linkHost = new URL(href).hostname;
+                if (linkHost === pageHost) return;
+                if (/facebook|instagram|twitter|linkedin|pinterest/.test(linkHost)) return;
+                links.push(href);
+              } catch {}
+            });
+            const uniqueLinks = [...new Set(links)].slice(0, 40);
+
+            if (text.length > 50) {
+              result.snippet += "\n[WEBSITE PREVIEW]: " + text;
             }
+            if (uniqueLinks.length > 0) {
+              result.snippet += "\n[EXTERNAL LINKS DETECTED]: " + uniqueLinks.join(', ');
+            }
+          } catch {
+            // Silently skip — search snippet is usually enough
           }
-        }
+        });
+        // Run all enrichment fetches in parallel (they're just HTTP requests, no browser)
+        await Promise.allSettled(enrichPromises);
         // ------------------------------
-        
+
         allSearchResults.push(...results);
         console.log(`[RegionDiscovery] Query "${query}" → ${results.length} results`);
         // Small delay between searches to be respectful
@@ -112,39 +122,39 @@ export async function discoverBrandsInRegion(
     }
     // End of discovery loop
 
-  if (allSearchResults.length === 0) {
-    console.warn(`[RegionDiscovery] No search results found for region "${region}"`);
-    return [];
-  }
-
-  // De-duplicate search results by Exact URL (not domain, since directories have many brands!)
-  const seenUrls = new Set<string>();
-  const uniqueResults = allSearchResults.filter(r => {
-    try {
-      // Remove trailing slash for better deduplication
-      const cleanUrl = r.url.toLowerCase().replace(/\/$/, '');
-      if (seenUrls.has(cleanUrl)) return false;
-      seenUrls.add(cleanUrl);
-      return true;
-    } catch {
-      return false;
+    if (allSearchResults.length === 0) {
+      console.warn(`[RegionDiscovery] No search results found for region "${region}"`);
+      return [];
     }
-  });
 
-  console.log(`[RegionDiscovery] ${allSearchResults.length} total results → ${uniqueResults.length} unique domains`);
+    // De-duplicate search results by Exact URL (not domain, since directories have many brands!)
+    const seenUrls = new Set<string>();
+    const uniqueResults = allSearchResults.filter(r => {
+      try {
+        // Remove trailing slash for better deduplication
+        const cleanUrl = r.url.toLowerCase().replace(/\/$/, '');
+        if (seenUrls.has(cleanUrl)) return false;
+        seenUrls.add(cleanUrl);
+        return true;
+      } catch {
+        return false;
+      }
+    });
 
-  // ─── STEP 3: AI extraction — extract brand names + websites from results ──
-  const brands = await extractBrandsFromResults(uniqueResults, region, maxBrands, category);
+    console.log(`[RegionDiscovery] ${allSearchResults.length} total results → ${uniqueResults.length} unique domains`);
 
-  console.log(`[RegionDiscovery] AI extracted ${brands.length} candidate brands. Starting Two-Pass Verification...`);
-  
-  const verifiedBrands = await verifyDiscoveredBrands(brands, browser, region, category);
+    // ─── STEP 3: AI extraction — extract brand names + websites from results ──
+    const brands = await extractBrandsFromResults(uniqueResults, region, maxBrands, category);
 
-  console.log(`[RegionDiscovery] Two-Pass Verification complete. ${verifiedBrands.length} verified brands for "${region}"`);
-  return verifiedBrands;
+    console.log(`[RegionDiscovery] AI extracted ${brands.length} candidate brands. Starting Two-Pass Verification...`);
+
+    const verifiedBrands = await verifyDiscoveredBrands(brands, browser, region, category);
+
+    console.log(`[RegionDiscovery] Two-Pass Verification complete. ${verifiedBrands.length} verified brands for "${region}"`);
+    return verifiedBrands;
 
   } finally {
-    if (browser) await browser.close().catch(() => {});
+    if (browser) await browser.close().catch(() => { });
   }
 }
 
@@ -155,7 +165,7 @@ async function verifyDiscoveredBrands(
   category?: string
 ): Promise<DiscoveredBrand[]> {
   const verifiedBrands: DiscoveredBrand[] = [];
-  
+
   if (!browser) return brands;
 
   console.log(`[Verification] Verifying ${brands.length} brands against strict criteria...`);
@@ -167,21 +177,21 @@ async function verifyDiscoveredBrands(
     }
 
     const batch = brands.slice(i, i + BATCH_SIZE);
-    
+
     const batchPromises = batch.map(async (brand) => {
       let page: any;
       try {
         if (!browser.connected) {
           console.warn('[Verification] Browser disconnected. Falling back for this brand.');
-          return brand; 
+          return brand;
         }
-        
+
         page = await browser.newPage();
         const targetUrl = brand.website.startsWith('http') ? brand.website : `https://${brand.website}`;
-        
+
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
         const websiteText = await page.evaluate(() => document.body.innerText.substring(0, 6000));
-        
+
         const systemPrompt = `You are a strict brand verification AI. 
 Analyze the website text of "${brand.name}".
 RULES:
@@ -189,9 +199,9 @@ RULES:
 2. Verify they are NOT a massive global fast-fashion giant (like Zara, H&M, Shein).
 3. Verify they are reasonably based in or operate in "${region}".
 Output JSON: { "is_valid": true, "reason": "brief reason why" } or { "is_valid": false, "reason": "brief reason why" }`;
-        
+
         const userPrompt = `Website Text for ${brand.name} (${brand.website}):\n\n${websiteText.substring(0, 5000)}`;
-        
+
         const { result } = await generateStructuredResponse<{ is_valid: boolean }>(
           systemPrompt,
           userPrompt,
@@ -204,7 +214,7 @@ Output JSON: { "is_valid": true, "reason": "brief reason why" } or { "is_valid":
             }
           }
         );
-        
+
         if (result.is_valid === false) {
           console.log(`[Verification] Rejected ${brand.name}: Failed criteria (Sportswear, Fast Fashion, or wrong region)`);
           return null;
@@ -213,18 +223,18 @@ Output JSON: { "is_valid": true, "reason": "brief reason why" } or { "is_valid":
         }
       } catch (err) {
         console.warn(`[Verification] Scrape failed for ${brand.name}, keeping as fallback.`);
-        return brand; 
+        return brand;
       } finally {
         if (page && !page.isClosed()) {
-          await page.close().catch(() => {});
+          await page.close().catch(() => { });
         }
       }
     });
-    
+
     const results = await Promise.all(batchPromises);
     verifiedBrands.push(...(results.filter(b => b !== null) as DiscoveredBrand[]));
   }
-  
+
   return verifiedBrands;
 }
 
@@ -257,7 +267,7 @@ function buildSearchQueries(region: string, maxBrands: number, industrySources: 
   }
 
   const catStr = category && category !== 'all' ? `${category} ` : '';
-  
+
   // Core discovery queries — broader to catch more, but still apparel focused
   const templates = [
     (c: string) => `top ${catStr}shirt brands in ${c}`,
@@ -386,7 +396,7 @@ function buildSearchQueries(region: string, maxBrands: number, industrySources: 
     (c: string) => `${catStr}sustainable ${catStr}shirt brands ${c}`,
     (c: string) => `eco-friendly ${catStr}shirts ${c} brands ${c}`,
     (c: string) => `ethical ${catStr}shirts ${c} brands ${c}`,
-    (c: string) => `${catStr}shirt brands "made in ${c}" OR "designed in ${c}"`, 
+    (c: string) => `${catStr}shirt brands "made in ${c}" OR "designed in ${c}"`,
     (c: string) => `${catStr}shirt brands "fair trade certified" ${c}`,
     (c: string) => `${catStr}shirt startups "B Corp" ${c}`,
     (c: string) => `${catStr}shirt brands "online wholesale" ${c}`,
@@ -446,23 +456,23 @@ function buildSearchQueries(region: string, maxBrands: number, industrySources: 
   // We roughly need 1 query per 3 requested brands to get enough valid results
   // We already have some queries from trade fairs, so we subtract that
   const targetQueries = Math.max(5, maxBrands);
-  
+
   // Cycle through countries and templates until we hit our target query count
   let cIdx = 0;
   let tIdx = 0;
-  
+
   while (queries.length < targetQueries) {
     const country = countries[cIdx];
     const template = templates[tIdx];
     queries.push(template(country));
-    
+
     tIdx++;
     if (tIdx >= templates.length) {
       tIdx = 0;
       cIdx++;
       if (cIdx >= countries.length) {
         // If we run out of countries and templates, just break to avoid infinite loop
-        break; 
+        break;
       }
     }
   }
@@ -507,7 +517,7 @@ async function discoverIndustrySources(browser: any, region: string, targetCount
 
   // Use AI to extract Source names
   const resultsText = allSearchResults
-    .slice(0, 25) 
+    .slice(0, 25)
     .map((r, i) => `[${i + 1}] Title: ${r.title}\n    Snippet: ${r.snippet}`)
     .join('\n\n');
 
@@ -548,7 +558,7 @@ async function extractBrandsFromResults(
   region: string,
   maxBrands: number,
   category?: string): Promise<DiscoveredBrand[]> {
-  
+
   const CHUNK_SIZE = 40;
   const chunks: { title: string; snippet: string; url: string }[][] = [];
   for (let i = 0; i < searchResults.length; i += CHUNK_SIZE) {
@@ -579,7 +589,7 @@ EXAMPLES OF CORRECT EVALUATION:
   // We run in small batches to not overwhelm the LLM (which gets lazy on large lists)
   for (let i = 0; i < chunks.length; i += 3) {
     if (allExtractedBrands.length >= maxBrands) break;
-    
+
     const batchChunks = chunks.slice(i, i + 3);
     const batchPromises = batchChunks.map(async (chunk) => {
       const resultsText = chunk
@@ -621,8 +631,8 @@ Respond with ONLY this JSON (Do NOT include reasoning or descriptions to save sp
           userPrompt,
           (text: string) => {
             const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-            
-                        let parsed;
+
+            let parsed;
             try {
               parsed = JSON.parse(cleaned);
             } catch (parseError) {
@@ -638,7 +648,7 @@ Respond with ONLY this JSON (Do NOT include reasoning or descriptions to save sp
                   const shirtsMatch = block.match(/"sells_shirts"\s*:\s*(true|false)/);
                   const regionMatch = block.match(/"matches_region"\s*:\s*(true|false)/);
                   const catMatch = block.match(/"matches_category"\s*:\s*(true|false)/);
-                  
+
                   if (nameMatch && webMatch) {
                     salvagedBrands.push({
                       name: nameMatch[1].trim(),
@@ -662,9 +672,9 @@ Respond with ONLY this JSON (Do NOT include reasoning or descriptions to save sp
             if (!Array.isArray(parsed.brands)) return { brands: [] };
 
             const validBrands = parsed.brands
-              .filter((b: any) => 
-                b && 
-                typeof b.name === 'string' && 
+              .filter((b: any) =>
+                b &&
+                typeof b.name === 'string' &&
                 typeof b.website === 'string' &&
                 b.is_actual_apparel_brand === true &&
                 b.sells_shirts === true &&
@@ -690,7 +700,7 @@ Respond with ONLY this JSON (Do NOT include reasoning or descriptions to save sp
     });
 
     const results = await Promise.all(batchPromises);
-    
+
     // Deduplicate on the fly
     for (const chunkBrands of results) {
       for (const brand of chunkBrands) {
