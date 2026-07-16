@@ -139,13 +139,12 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
         }
       }
 
-      if (aiContacts.length === 0) {
-        console.log(`[Scrape] No contacts found via Regex on website, falling back to Gemini's internal knowledge base...`);
-        const kbResult = await findContactsFromKnowledge(brand.name);
-        if (kbResult && kbResult.contacts) {
-          aiContacts = kbResult.contacts.map(c => ({ ...c, _source: 'google_ai_sge' }));
-          console.log(`[Scrape] AI knowledge base extracted ${aiContacts.length} contacts`);
-        }
+      console.log(`[Scrape] Querying Gemini's internal knowledge base for contacts...`);
+      const kbResult = await findContactsFromKnowledge(brand.name);
+      if (kbResult && kbResult.contacts) {
+        const kbContacts = kbResult.contacts.map(c => ({ ...c, _source: 'google_ai_sge' }));
+        aiContacts = [...aiContacts, ...kbContacts];
+        console.log(`[Scrape] AI knowledge base extracted ${kbContacts.length} contacts`);
       }
     } catch (e) {
       console.warn('[Scrape] AI contact extraction failed:', e instanceof Error ? e.message : e);
