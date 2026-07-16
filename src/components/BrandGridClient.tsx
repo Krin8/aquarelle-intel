@@ -18,8 +18,36 @@ type BrandType = {
   segment: string | null;
   dataFreshness: number;
   matchScore: number | null;
+  marketGrade: string | null;
+  storesCount: number | null;
+  retailPriceMensShirt: string | null;
   _count: { contacts: number; aiAnalyses: number };
 };
+
+function getGradeDetails(gradeStr: string | null) {
+  if (!gradeStr) return null;
+  const grade = gradeStr.toUpperCase();
+  if (grade === 'A+' || grade === 'A') return { label: grade, color: '#065f46', bg: '#d1fae5', border: '#34d399' };
+  if (grade === 'B') return { label: grade, color: '#92400e', bg: '#fef3c7', border: '#fbbf24' };
+  if (grade === 'C') return { label: grade, color: '#1e3a8a', bg: '#dbeafe', border: '#60a5fa' };
+  return { label: grade, color: '#991b1b', bg: '#fee2e2', border: '#f87171' };
+}
+
+function getPriceGrade(priceStr: string | null, marketGrade: string | null) {
+  if (marketGrade) return getGradeDetails(marketGrade);
+  if (!priceStr) return null;
+  const cleanPriceStr = priceStr.replace(/,/g, '');
+  const matches = cleanPriceStr.match(/\d+(\.\d+)?/g);
+  if (!matches) return null;
+  const numbers = matches.map(Number);
+  const avg = numbers.reduce((a, b) => a + b, 0) / numbers.length;
+
+  if (avg >= 120) return getGradeDetails('A+');
+  if (avg >= 80) return getGradeDetails('A');
+  if (avg >= 50) return getGradeDetails('B');
+  if (avg >= 25) return getGradeDetails('C');
+  return getGradeDetails('D');
+}
 
 export function BrandGridClient({ brands }: { brands: BrandType[] }) {
   const router = useRouter();
@@ -143,21 +171,60 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
               </div>
 
               <Link href={`/brands/${brand.id}`} style={{ display: 'flex', flex: 1, alignItems: 'center', textDecoration: 'none', color: 'inherit', gap: '24px' }}>
-                <div style={{ flex: '2', minWidth: '200px' }}>
+                <div style={{ flex: '1.5', minWidth: '160px', flexShrink: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: '15px' }}>{brand.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {brand.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                   </div>
                 </div>
 
-                <div style={{ flex: '1', minWidth: '100px' }}>
-                  <span className={`status-badge ${brand.status}`}>{brand.status}</span>
+                <div style={{ flex: '4', display: 'flex', flexWrap: 'wrap', gap: '8px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>{brand.countryOfOrigin || 'Unknown'}</span>
+                  {brand.segment && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>{brand.segment}</span>}
+                  
+                  {(() => {
+                    const gradeInfo = getPriceGrade(brand.retailPriceMensShirt, brand.marketGrade);
+                    return gradeInfo ? (
+                      <span style={{ 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 800, fontSize: '13px',
+                        width: '26px', height: '26px',
+                        borderRadius: '6px',
+                        color: gradeInfo.color,
+                        backgroundColor: gradeInfo.bg,
+                        border: `2px solid ${gradeInfo.border}`,
+                        whiteSpace: 'nowrap',
+                        marginRight: '8px'
+                      }}>
+                        {gradeInfo.label}
+                      </span>
+                    ) : null;
+                  })()}
+
+                  {brand.storesCount ? (
+                    <span style={{ 
+                      display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap',
+                      padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 500,
+                      backgroundColor: brand.storesCount > 500 ? '#dcfce7' : brand.storesCount > 150 ? '#fef3c7' : '#dbeafe',
+                      color: brand.storesCount > 500 ? '#166534' : brand.storesCount > 150 ? '#92400e' : '#1e3a8a',
+                      border: `1px solid ${brand.storesCount > 500 ? '#bbf7d0' : brand.storesCount > 150 ? '#fde68a' : '#bfdbfe'}`
+                    }}>
+                      Size: {brand.storesCount > 500 ? 'Large' : brand.storesCount > 150 ? 'Medium' : 'Small'} ({brand.storesCount})
+                    </span>
+                  ) : null}
+                  {brand.retailPriceMensShirt && (
+                    <span style={{ 
+                      display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap',
+                      padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 500,
+                      backgroundColor: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0'
+                    }}>
+                      {brand.retailPriceMensShirt}
+                    </span>
+                  )}
                 </div>
 
-                <div style={{ flex: '2', display: 'flex', gap: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>◉ {brand.countryOfOrigin || 'Unknown'}</span>
-                  {brand.segment && <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>◈ {brand.segment}</span>}
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>👤 {brand._count.contacts}</span>
+                <div style={{ flex: '1', minWidth: '100px', display: 'flex', justifyContent: 'center' }}>
+                  <span className={`status-badge ${brand.status}`}>{brand.status}</span>
                 </div>
 
                 <div style={{ flex: '1', textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
