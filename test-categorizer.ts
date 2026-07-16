@@ -1,4 +1,4 @@
-import { filterShirts, dedupeProductVariants } from './src/lib/scraper/shirt-filter';
+import { filterWovens, dedupeProductVariants } from './src/lib/scraper/woven-filter';
 import { categorizeProducts } from './src/lib/ai/analyzers/product-categorizer';
 
 async function test() {
@@ -19,8 +19,8 @@ async function test() {
   const deduped = dedupeProductVariants(products);
   console.log('--- DEDUPED ---', deduped.length);
   
-  const valid = filterShirts(deduped);
-  console.log('--- VALID SHIRTS ---', valid.length);
+  const valid = filterWovens(deduped);
+  console.log('--- VALID WOVENS ---', valid.length);
   valid.forEach(p => console.log('  ', p.name));
   
   const categorized = await categorizeProducts(valid, 'American Eagle');
