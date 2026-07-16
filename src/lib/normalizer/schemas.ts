@@ -25,8 +25,8 @@ export const GapDetectionSchema = z.object({
     gap: z.string().catch('Unknown gap'),
     opportunity: z.string().catch('Unknown opportunity'),
     severity: z.string().transform(val => val.toLowerCase()).catch('medium').describe('high/medium/low'),
-  })).catch([]).describe('Product gaps Aquarelle can fill'),
-  priceAlignment: z.string().catch('Unknown').describe('How well prices align with Aquarelle capabilities'),
+  })).catch([]).describe('Product gaps Tropic can fill'),
+  priceAlignment: z.string().catch('Unknown').describe('How well prices align with Tropic capabilities'),
   regionFit: z.string().catch('Unknown').describe('How well the brand fits target regions'),
   complianceNotes: z.string().nullish().catch(null).describe('Any compliance considerations'),
   risks: z.array(z.string()).nullish().catch([]).describe('Potential risks or challenges'),
@@ -35,7 +35,7 @@ export const GapDetectionSchema = z.object({
 export type GapDetection = z.infer<typeof GapDetectionSchema>;
 
 export const PitchSuggestionSchema = z.object({
-  executiveSummary: z.string().describe('McKinsey-style executive summary of why Aquarelle is the perfect partner'),
+  executiveSummary: z.string().describe('McKinsey-style executive summary of why Tropic is the perfect partner'),
   pitchAngles: z.array(z.object({
     title: z.string(),
     rationale: z.string(),
@@ -87,7 +87,7 @@ export const FinancialIntelligenceSchema = z.object({
   profitPct: z.number().nullish().describe('Profit percentage as a decimal between 0 and 1 (e.g., 0.09 for 9%)'),
   smv: z.number().nullish().describe('Standard Minute Value (SMV) in minutes'),
   cpuGrade: z.string().nullish().describe('CPU Grade (e.g., "A", "B", "C")'),
-  prospectForAqrlMur: z.enum(['Yes', 'No']).nullish().describe('Is this a viable prospect for Aquarelle Mauritius?'),
+  prospectForAqrlMur: z.enum(['Yes', 'No']).nullish().describe('Is this a viable prospect for Tropic Knits India?'),
 });
 
 export type FinancialIntelligence = z.infer<typeof FinancialIntelligenceSchema>;

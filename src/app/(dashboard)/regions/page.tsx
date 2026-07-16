@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import prisma from '@/lib/db';
 
-export default async function RegionsPage() {
+export default async function CountriesPage() {
   const brands = await prisma.brand.findMany({
     select: {
       id: true,
@@ -44,22 +44,22 @@ export default async function RegionsPage() {
     <div>
       <div className="page-header">
         <div className="page-header-content">
-          <h1 className="page-title">Regions</h1>
+          <h1 className="page-title">Countries</h1>
           <p className="page-subtitle">
-            Geographic targeting across {regions.length} region{regions.length !== 1 ? 's' : ''}
+            Geographic targeting across {regions.length} {regions.length !== 1 ? 'countries' : 'country'}
           </p>
         </div>
         <Link href="/regions/scan" className="btn btn-primary">
-          <span>🔍</span> Scan Region
+          <span>🔍</span> Scan Country
         </Link>
       </div>
 
       {regions.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">◉</div>
-          <div className="empty-state-title">No regions yet</div>
+          <div className="empty-state-title">No countries yet</div>
           <p className="empty-state-description">
-            Regions appear automatically when you add brands with regional targeting.
+            Countries appear automatically when you add brands with country targeting.
           </p>
           <Link href="/brands/new" className="btn btn-primary btn-sm" style={{ marginTop: 'var(--space-sm)' }}>
             Add Brand

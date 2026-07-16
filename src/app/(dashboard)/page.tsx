@@ -66,7 +66,7 @@ export default async function DashboardPage() {
           </span>
         </div>
         <div className="stat-card">
-          <span className="stat-card-label">Regions Active</span>
+          <span className="stat-card-label">Countries Active</span>
           <span className="stat-card-value">{regionCounts.length}</span>
         </div>
       </div>

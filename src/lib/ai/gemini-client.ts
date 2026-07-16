@@ -44,7 +44,11 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, initial
   let lastError: any;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      return await operation();
+      // Add a 60-second hard timeout to prevent silent connection hangs
+      return await Promise.race([
+        operation(),
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Gemini API request timed out after 60s')), 60000))
+      ]);
     } catch (error: any) {
       lastError = error;
       const is503 = error?.status === 503 || error?.message?.includes('503') || error?.status === 'UNAVAILABLE';

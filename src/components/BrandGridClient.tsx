@@ -86,8 +86,12 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
 
     setIsScraping(true); // Re-using this loading state for simplicity
     
-    const idsArray = Array.from(selectedIds);
-    await deleteBrands(idsArray);
+    try {
+      const idsArray = Array.from(selectedIds);
+      await deleteBrands(idsArray);
+    } catch (e) {
+      console.error('Failed to delete brands:', e);
+    }
     
     setIsScraping(false);
     setSelectedIds(new Set());

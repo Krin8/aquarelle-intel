@@ -5,7 +5,7 @@ import { scrapeUrl } from '@/lib/scraper';
 import { scoreConfidence, getContactConfidence } from '@/lib/normalizer/confidence-scorer';
 import { extractContacts, findContactsFromKnowledge } from '@/lib/ai/analyzers/contact-extractor';
 import { extractCompanyOverview } from '@/lib/ai/analyzers/company-overview-extractor';
-import { filterShirts, dedupeProductVariants } from '@/lib/scraper/shirt-filter';
+import { filterWovens, dedupeProductVariants } from '@/lib/scraper/woven-filter';
 import { categorizeProducts } from '@/lib/ai/analyzers/product-categorizer';
 import { convertToUSD } from '@/lib/scraper/fx-converter';
 import { findDomainAndPatternWithHunter, findDomainPatternWithHunter, findRobustDomainPattern, generateEmail, deriveEmailPattern } from '@/lib/normalizer/email-pattern';
@@ -409,7 +409,7 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
       // 1. Keyword Pre-Filter (fast, cheap)
       console.log(`[Scrape Debug] Raw product sample (first 5):`, content.extractedProducts.slice(0, 5).map((p: any) => `${p.name} | img:${!!p.imageUrl} | src:${!!p.sourceUrl}`));
       const dedupedProducts = dedupeProductVariants(content.extractedProducts);
-      const validShirts = filterShirts(dedupedProducts);
+      const validShirts = filterWovens(dedupedProducts);
       
       // 2. Strict Taxonomy Categorization (Regex-based)
       const categorizedShirts = await categorizeProducts(validShirts, brand.name);

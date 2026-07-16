@@ -131,7 +131,11 @@ export function RegionScanClient({ initialBrands }: { initialBrands: RegionBrand
   };
 
   const handleCancel = async () => {
-    await cancelRegionScan();
+    try {
+      await cancelRegionScan();
+    } catch (e) {
+      console.error('Failed to cancel scan:', e);
+    }
     setProgress(null);
   };
 

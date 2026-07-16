@@ -19,8 +19,8 @@ export interface WarmIntroductionPath {
 }
 
 /**
- * Searches the RelationshipEdge graph to find the strongest path
- * between Aquarelle (Internal) and the target Decision Maker.
+ * Analyze the provided brand overview and search the knowledge base for existing relationships
+ * between Tropic (Internal) and the target Decision Maker.
  */
 export async function findWarmIntroductionPath(contactId: string): Promise<WarmIntroductionPath | null> {
   const contact = await prisma.contact.findUnique({
@@ -30,43 +30,43 @@ export async function findWarmIntroductionPath(contactId: string): Promise<WarmI
 
   if (!contact) return null;
 
-  // In a real production system, this would be a recursive CTE or BFS on the RelationshipEdge table.
   // We will check for existing edges connected to this contact.
   const targetEdges = await prisma.relationshipEdge.findMany({
     where: { targetId: contact.id }
   });
 
-  // If there are no real multi-hop edges seeded yet, we will generate a high-value simulated path
-  // based on the Aquarelle KB to demonstrate the Relationship Intelligence Engine.
+  // MOCK IMPLEMENTATION: In a real app, this would query a Graph DB (Neo4j) or Salesforce.
+  // We'll return some realistic but mock data based on the brand's profile and size,
+  // based on the Tropic KB to demonstrate the Relationship Intelligence Engine.
   
   let simulatedPath: WarmIntroductionPath;
   
   if (contact.brand.name.toLowerCase().includes('tommy') || contact.brand.name.toLowerCase().includes('ralph')) {
     simulatedPath = {
       strengthScore: 85,
-      rationale: "Aquarelle's Joint Venture (COTONA) already supplies fabrics to their European division.",
+      rationale: "Tropic Knits already supplies fine knits to their European division.",
       nodes: [
-        { type: 'Internal', name: 'Aquarelle India', id: 'aquarelle' },
-        { type: 'Supplier', name: 'COTONA JV (Madagascar)', id: 'cotona' },
+        { type: 'Internal', name: 'Tropic Knits India', id: 'tropic' },
+        { type: 'Supplier', name: 'Tropic Logistics', id: 'tropic-logistics' },
         { type: 'Contact', name: contact.name, id: contact.id }
       ],
       edges: [
-        { relationType: 'OWNS', evidence: 'Internal knowledge: Aquarelle 50/50 JV' },
-        { relationType: 'SUPPLIES', evidence: 'Public ESG Report: COTONA listed as approved mill' }
+        { relationType: 'SUPPLIES', evidence: 'Internal knowledge: Tropic Knits existing vendor' },
+        { relationType: 'LOGISTICS', evidence: 'Public shipping data: Tropic Logistics listed as approved handler' }
       ]
     };
   } else {
     simulatedPath = {
       strengthScore: 70,
-      rationale: "Both Aquarelle and the Target Brand are active members of the Sustainable Apparel Coalition (SAC), providing a neutral ground for a warm introduction.",
+      rationale: "Both Tropic and the Target Brand are active members of the Sustainable Apparel Coalition (SAC), providing a neutral ground for a warm introduction.",
       nodes: [
-        { type: 'Internal', name: 'Aquarelle India', id: 'aquarelle' },
+        { type: 'Internal', name: 'Tropic Knits', id: 'tropic' },
         { type: 'Association', name: 'Sustainable Apparel Coalition', id: 'sac' },
         { type: 'Contact', name: contact.name, id: contact.id }
       ],
       edges: [
-        { relationType: 'MEMBER_OF', evidence: 'Aquarelle Sustainability Profile' },
-        { relationType: 'SPOKE_AT', evidence: `Public Event: ${contact.name} paneled at SAC Summit 2025` }
+        { relationType: 'MEMBER_OF', evidence: 'Tropic Sustainability Profile' },
+        { relationType: 'MEMBER_OF', evidence: 'Brand Public Sustainability Report' }
       ]
     };
   }

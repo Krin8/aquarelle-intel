@@ -37,7 +37,12 @@ export function RefreshBrandsButton() {
 
   async function handleRefresh() {
     setLoading(true);
-    await bulkScrapeBrands();
+    try {
+      await bulkScrapeBrands();
+    } catch (e) {
+      console.error('Failed to trigger bulk scrape:', e);
+      setLoading(false);
+    }
   }
 
   return (
