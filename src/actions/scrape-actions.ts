@@ -581,8 +581,8 @@ export async function bulkScrapeBrands() {
     isScraping: true
   };
 
-  // Fire and forget background process
-  (async () => {
+  // Fire and forget background process, wrapping in setTimeout to prevent Next.js from blocking the response
+  setTimeout(async () => {
     console.log(`[BulkScrape] Starting bulk scrape for ${brands.length} brands...`);
     for (const brand of brands) {
       if (globalThis.bulkScrapeProgress) {
@@ -610,7 +610,7 @@ export async function bulkScrapeBrands() {
       globalThis.bulkScrapeProgress.isScraping = false;
       globalThis.bulkScrapeProgress.currentBrand = 'Done';
     }
-  })();
+  }, 100);
 
   return { success: true };
 }

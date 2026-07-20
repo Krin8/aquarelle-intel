@@ -60,8 +60,8 @@ export async function startRegionScan(region: string, maxBrands: number = 20, ta
     startedAt: Date.now(),
   };
 
-  // Fire and forget — runs in the background
-  (async () => {
+  // Fire and forget — runs in the background, wrapping in setTimeout to prevent Next.js from blocking the response
+  setTimeout(async () => {
     try {
       // ─── PHASE 1: Discover brands ──────────────────────────────────────────
       console.log(`[RegionScan] Phase 1: Discovering brands in "${region}"${targetCountry ? ` (Target: ${targetCountry})` : ''}...`);
@@ -176,7 +176,7 @@ export async function startRegionScan(region: string, maxBrands: number = 20, ta
         );
       }
     }
-  })();
+  }, 100);
 
   return { success: true, message: `Region scan started for "${region}"` };
 }
