@@ -70,8 +70,24 @@ export async function discoverBrandsInRegion(
       }
 
       try {
-        if (!browser || !browser.connected) {
-          console.warn('[RegionDiscovery] Browser disconnected. Relaunching...');
+        let browserHealthy = false;
+        if (browser && browser.connected) {
+          try {
+            const testPromise = browser.newPage();
+            const testPage = await Promise.race([
+              testPromise,
+              new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+            ]) as any;
+            await testPage.close();
+            browserHealthy = true;
+          } catch (e) {
+            console.warn('[RegionDiscovery] Browser health check failed.');
+          }
+        }
+
+        if (!browserHealthy) {
+          console.warn('[RegionDiscovery] Browser disconnected or wedged. Relaunching...');
+          if (browser) await browser.close().catch(() => {});
           browser = await launchBrowser();
         }
 
@@ -100,7 +116,7 @@ export async function discoverBrandsInRegion(
           }
         });
         console.log(`[RegionDiscovery] Enriching ${enrichTargets.length}/${results.length} URLs (skipped ${results.length - enrichTargets.length} blocked/duplicate)`);
-        const BATCH_SIZE = 5;
+        const BATCH_SIZE = 2;
         for (let batchStart = 0; batchStart < enrichTargets.length; batchStart += BATCH_SIZE) {
           if ((globalThis as any).regionScanProgress && !(globalThis as any).regionScanProgress.isScanning) break;
           if (!browser || !browser.connected) break;
@@ -116,12 +132,15 @@ export async function discoverBrandsInRegion(
               const startTime = Date.now();
 
               const enrichmentTask = (async () => {
-                page = await browser.newPage();
-                // Request interception removed — it caused deadlocks on some websites
-
                 const targetUrl = result.url.startsWith('http') ? result.url : `https://${result.url}`;
-                await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: adaptiveTimeout });
+                console.log(`[Preview] Opening page ${targetUrl}`);
+                page = await browser.newPage();
+                console.log(`[Preview] Page opened for ${targetUrl}`);
 
+                await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: adaptiveTimeout });
+                console.log(`[Preview] Loaded ${targetUrl}`);
+
+                console.log(`[Preview] Extracting text for ${targetUrl}`);
                 const scrapeData = await page.evaluate(() => {
                   const text = document.body.innerText.substring(0, 6000);
                   const links = Array.from(document.querySelectorAll('a'))
