@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getFreshnessLabel } from '@/lib/normalizer/confidence-scorer';
 import { scrapeBrand } from '@/actions/scrape-actions';
@@ -49,12 +49,112 @@ function getPriceGrade(priceStr: string | null, marketGrade: string | null) {
   return getGradeDetails('D');
 }
 
+const CURRENCY_MAP: Record<string, string> = {
+  '€': 'EUR', 'EUR': 'EUR',
+  '£': 'GBP', 'GBP': 'GBP',
+  '¥': 'JPY', 'JPY': 'JPY',
+  '₹': 'INR', 'INR': 'INR',
+  'A$': 'AUD', 'AUD': 'AUD',
+  'C$': 'CAD', 'CAD': 'CAD',
+  '$': 'USD', 'USD': 'USD',
+  'CHF': 'CHF', 'Fr.': 'CHF'
+};
+
+function convertPriceToUSD(priceStr: string | null, rates: Record<string, number> | null): string | null {
+  if (!priceStr) return null;
+  if (!rates) return priceStr;
+
+  let currencyCode = 'USD';
+  const upperPrice = priceStr.toUpperCase();
+  
+  for (const [sym, code] of Object.entries(CURRENCY_MAP)) {
+    if (upperPrice.includes(sym.toUpperCase())) {
+      currencyCode = code;
+      if (sym !== '$' && sym !== 'USD') break;
+    }
+  }
+
+  // Find all numbers in the string
+  const cleanPriceStr = priceStr.replace(/,/g, '');
+  const matches = cleanPriceStr.match(/\d+(\.\d+)?/g);
+  if (!matches) return priceStr;
+  
+  if (currencyCode === 'USD') {
+    if (!priceStr.includes('$') && !upperPrice.includes('USD')) {
+      return `$${priceStr}`;
+    }
+    return priceStr;
+  }
+
+  const rate = rates[currencyCode];
+  if (!rate) return priceStr;
+
+  let convertedStr = priceStr;
+  
+  // Replace each number with its converted value
+  for (const match of matches) {
+    const num = parseFloat(match);
+    if (!isNaN(num)) {
+      const converted = (num / rate).toFixed(2);
+      // use a regex to replace the exact number, avoiding partial matches
+      const regex = new RegExp(`(?<!\\d)${match.replace('.', '\\.')}(?!\\d)`);
+      convertedStr = convertedStr.replace(regex, converted);
+    }
+  }
+  
+  // Strip out original currency symbols and codes (case insensitive)
+  for (const sym of Object.keys(CURRENCY_MAP)) {
+    if (sym !== '$' && sym !== 'USD') {
+      const escapedSym = sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escapedSym, 'gi');
+      convertedStr = convertedStr.replace(regex, '');
+    }
+  }
+  
+  convertedStr = convertedStr.trim();
+  
+  // If it's a range like "34.17 - 52.41", we can just prepend $
+  if (!convertedStr.includes('$')) {
+    convertedStr = `$${convertedStr}`;
+  }
+  
+  return convertedStr;
+}
+
 export function BrandGridClient({ brands }: { brands: BrandType[] }) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeProgress, setScrapeProgress] = useState({ current: 0, total: 0 });
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number> | null>(null);
+
+  useEffect(() => {
+    async function fetchRates() {
+      try {
+        const cached = localStorage.getItem('exchangeRates_USD');
+        if (cached) {
+          const { rates, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
+            setExchangeRates(rates);
+            return;
+          }
+        }
+        const res = await fetch('https://open.er-api.com/v6/latest/USD');
+        const data = await res.json();
+        if (data && data.rates) {
+          setExchangeRates(data.rates);
+          localStorage.setItem('exchangeRates_USD', JSON.stringify({
+            rates: data.rates,
+            timestamp: Date.now()
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to fetch exchange rates', err);
+      }
+    }
+    fetchRates();
+  }, []);
 
   function toggleSelect(id: string) {
     const next = new Set(selectedIds);
@@ -183,7 +283,8 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
                   {brand.segment && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>{brand.segment}</span>}
                   
                   {(() => {
-                    const gradeInfo = getPriceGrade(brand.retailPriceMensShirt, brand.marketGrade);
+                    const convertedPrice = convertPriceToUSD(brand.retailPriceMensShirt, exchangeRates);
+                    const gradeInfo = getPriceGrade(convertedPrice, brand.marketGrade);
                     return gradeInfo ? (
                       <span style={{ 
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -212,15 +313,22 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
                       Size: {brand.storesCount > 500 ? 'Large' : brand.storesCount > 150 ? 'Medium' : 'Small'} ({brand.storesCount})
                     </span>
                   ) : null}
-                  {brand.retailPriceMensShirt && (
-                    <span style={{ 
-                      display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap',
-                      padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 500,
-                      backgroundColor: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0'
-                    }}>
-                      {brand.retailPriceMensShirt}
-                    </span>
-                  )}
+                  {brand.retailPriceMensShirt && (() => {
+                    const convertedPrice = convertPriceToUSD(brand.retailPriceMensShirt, exchangeRates);
+                    return (
+                      <span 
+                        title={`Original price: ${brand.retailPriceMensShirt}`}
+                        style={{ 
+                          display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap',
+                          padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 500,
+                          backgroundColor: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0',
+                          cursor: 'help'
+                        }}
+                      >
+                        {convertedPrice}
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 <div style={{ flex: '1', minWidth: '100px', display: 'flex', justifyContent: 'center' }}>

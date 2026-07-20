@@ -26,6 +26,9 @@ STRICT SCORING BANDS (DO NOT OVERRIDE):
 - 30-49: Partial Category overlap (e.g. they sell a few shirts but are primarily an accessories/footwear brand).
 - 0-29: NO CATEGORY OVERLAP. If the brand does NOT sell shirts, the score MUST be under 30. No exceptions for "strong branding" or "great market presence". If they don't sell shirts, we can't manufacture for them.
 
+IMPORTANT SCORE PRECISION RULE:
+DO NOT output lazy, rounded numbers like 25, 50, or 75. You MUST calculate a highly granular, precise score (e.g. 12, 43, 68, 82, 94) that accurately reflects the exact nuance and weight of the evidence found in the analysis.
+
 SEVERITY criteria for each productGap:
 - "high": the gap is a real blocker to doing business, or addresses a clearly stated, significant pain point in the brand analysis
 - "medium": a real but non-urgent improvement opportunity — brand likely has a workable status quo
