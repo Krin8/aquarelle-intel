@@ -8,11 +8,10 @@ const navItems = [
     section: 'Intelligence',
     items: [
       { href: '/', label: 'Dashboard', icon: '◈' },
-      { href: '/brands', label: 'Prospect Intelligence', icon: '❖' },
-      { href: '/intelligence', label: 'AI Insights', icon: '✦' },
-      { href: '/analytics', label: 'Analytics', icon: '📊' },
       { href: '/regions', label: 'Countries', icon: '◉' },
       { href: '/regions/scan', label: 'Country Scan', icon: '🔍' },
+      { href: '/intelligence', label: 'AI Insights', icon: '✦' },
+      { href: '/analytics', label: 'Analytics', icon: '📊' },
     ],
   },
   {
