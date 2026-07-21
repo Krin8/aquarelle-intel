@@ -20,6 +20,7 @@ type BrandType = {
   matchScore: number | null;
   marketGrade: string | null;
   storesCount: number | null;
+  priceRange: string | null;
   retailPriceMensShirt: string | null;
   _count: { contacts: number; aiAnalyses: number };
 };
@@ -241,6 +242,19 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {/* HEADER ROW */}
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', padding: '0 16px', marginBottom: '4px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ width: '16px' }}></div>
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(140px, 2fr) minmax(90px, 1fr) minmax(90px, 1fr) minmax(120px, 1.5fr) 100px 100px', gap: '16px', alignItems: 'center' }}>
+            <div>Brand Name</div>
+            <div>Retail Price</div>
+            <div>Stores</div>
+            <div>Details</div>
+            <div style={{ textAlign: 'center' }}>Status</div>
+            <div style={{ textAlign: 'right' }}>Match</div>
+          </div>
+        </div>
+
         {brands.map((brand, i) => {
           const freshness = getFreshnessLabel(brand.dataFreshness);
           const isSelected = selectedIds.has(brand.id);
@@ -270,72 +284,82 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
                 />
               </div>
 
-              <Link href={`/brands/${brand.id}`} style={{ display: 'flex', flex: 1, alignItems: 'center', textDecoration: 'none', color: 'inherit', gap: '24px' }}>
-                <div style={{ flex: '1.5', minWidth: '160px', flexShrink: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: '15px' }}>{brand.name}</div>
+              <Link href={`/brands/${brand.id}`} style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(140px, 2fr) minmax(90px, 1fr) minmax(90px, 1fr) minmax(120px, 1.5fr) 100px 100px', gap: '16px', alignItems: 'center', textDecoration: 'none', color: 'inherit' }}>
+                {/* 1. Brand Name */}
+                <div style={{ overflow: 'hidden' }}>
+                  <div style={{ fontWeight: 600, fontSize: '15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{brand.name}</div>
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {brand.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                   </div>
                 </div>
 
-                <div style={{ flex: '4', display: 'flex', flexWrap: 'wrap', gap: '8px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>{brand.countryOfOrigin || 'Unknown'}</span>
-                  {brand.segment && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>{brand.segment}</span>}
-                  
+                {/* 3. Retail Price */}
+                <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)' }}>
                   {(() => {
-                    const convertedPrice = convertPriceToUSD(brand.retailPriceMensShirt, exchangeRates);
+                    const convertedPrice = brand.retailPriceMensShirt ? convertPriceToUSD(brand.retailPriceMensShirt, exchangeRates) : null;
                     const gradeInfo = getPriceGrade(convertedPrice, brand.marketGrade);
-                    return gradeInfo ? (
-                      <span style={{ 
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontWeight: 800, fontSize: '13px',
-                        width: '26px', height: '26px',
-                        borderRadius: '6px',
-                        color: gradeInfo.color,
-                        backgroundColor: gradeInfo.bg,
-                        border: `2px solid ${gradeInfo.border}`,
-                        whiteSpace: 'nowrap',
-                        marginRight: '8px'
-                      }}>
-                        {gradeInfo.label}
-                      </span>
-                    ) : null;
-                  })()}
-
-                  {brand.storesCount ? (
-                    <span style={{ 
-                      display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap',
-                      padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 500,
-                      backgroundColor: brand.storesCount > 500 ? '#dcfce7' : brand.storesCount > 150 ? '#fef3c7' : '#dbeafe',
-                      color: brand.storesCount > 500 ? '#166534' : brand.storesCount > 150 ? '#92400e' : '#1e3a8a',
-                      border: `1px solid ${brand.storesCount > 500 ? '#bbf7d0' : brand.storesCount > 150 ? '#fde68a' : '#bfdbfe'}`
-                    }}>
-                      Size: {brand.storesCount > 500 ? 'Large' : brand.storesCount > 150 ? 'Medium' : 'Small'} ({brand.storesCount})
-                    </span>
-                  ) : null}
-                  {brand.retailPriceMensShirt && (() => {
-                    const convertedPrice = convertPriceToUSD(brand.retailPriceMensShirt, exchangeRates);
+                    
+                    if (!convertedPrice && !gradeInfo) return <span>-</span>;
+                    
                     return (
                       <span 
-                        title={`Original price: ${brand.retailPriceMensShirt}`}
+                        title={brand.retailPriceMensShirt ? `Original price: ${brand.retailPriceMensShirt}` : undefined}
                         style={{ 
-                          display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap',
-                          padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 500,
-                          backgroundColor: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0',
-                          cursor: 'help'
+                          display: 'inline-flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap',
+                          padding: '2px 4px 2px 10px', borderRadius: '16px', fontSize: '12px', fontWeight: 600,
+                          backgroundColor: gradeInfo ? gradeInfo.bg : '#dcfce7', 
+                          color: gradeInfo ? gradeInfo.color : '#166534', 
+                          border: `1px solid ${gradeInfo ? gradeInfo.border : '#bbf7d0'}`,
+                          cursor: brand.retailPriceMensShirt ? 'help' : 'default'
                         }}
                       >
-                        {convertedPrice}
+                        {convertedPrice ? convertedPrice : 'Unknown'}
+                        {gradeInfo && (
+                          <span style={{ 
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            fontWeight: 800, fontSize: '12px',
+                            minWidth: '22px', height: '22px',
+                            padding: '0 6px',
+                            borderRadius: '12px',
+                            color: '#fff',
+                            backgroundColor: gradeInfo.color,
+                          }}>
+                            {gradeInfo.label}
+                          </span>
+                        )}
                       </span>
                     );
                   })()}
                 </div>
 
-                <div style={{ flex: '1', minWidth: '100px', display: 'flex', justifyContent: 'center' }}>
+                {/* 4. Stores */}
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  {brand.storesCount !== null ? (
+                    <span style={{ 
+                      display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap',
+                      padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 500,
+                      backgroundColor: brand.storesCount > 500 ? '#dcfce7' : brand.storesCount > 150 ? '#fef3c7' : '#dbeafe',
+                      color: brand.storesCount > 500 ? '#166534' : brand.storesCount > 150 ? '#92400e' : '#1e3a8a',
+                      border: `1px solid ${brand.storesCount > 500 ? '#bbf7d0' : brand.storesCount > 150 ? '#fde68a' : '#bfdbfe'}`
+                    }}>
+                      {brand.storesCount > 500 ? 'Large' : brand.storesCount > 150 ? 'Medium' : 'Small'} ({brand.storesCount})
+                    </span>
+                  ) : '-'}
+                </div>
+
+                {/* 5. Details (Tags) */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  {brand.countryOfOrigin && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>{brand.countryOfOrigin}</span>}
+                  {brand.segment && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>{brand.segment}</span>}
+                </div>
+
+                {/* 6. Status */}
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <span className={`status-badge ${brand.status}`}>{brand.status}</span>
                 </div>
 
-                <div style={{ flex: '1', textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                {/* 7. Match Score */}
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                   {brand.matchScore !== null ? (
                     <span style={{
                       fontWeight: 600,
