@@ -730,7 +730,7 @@ Respond with ONLY this JSON (Do NOT include reasoning or descriptions to save sp
                   const webMatch = block.match(/"website"\s*:\s*"([^"]+)"/);
                   const countryMatch = block.match(/"country"\s*:\s*"([^"]+)"/);
                   const actualMatch = block.match(/"is_actual_apparel_brand"\s*:\s*(true|false)/);
-                  const shirtsMatch = block.match(/"sells_shirts"\s*:\s*(true|false)/);
+                  const knitsMatch = block.match(/"sells_knits"\s*:\s*(true|false)/);
                   const regionMatch = block.match(/"matches_region"\s*:\s*(true|false)/);
                   const catMatch = block.match(/"matches_category"\s*:\s*(true|false)/);
 
@@ -740,7 +740,7 @@ Respond with ONLY this JSON (Do NOT include reasoning or descriptions to save sp
                       website: webMatch[1].trim(),
                       country: countryMatch ? countryMatch[1].trim() : region,
                       is_actual_apparel_brand: actualMatch ? actualMatch[1] === 'true' : true,
-                      sells_shirts: shirtsMatch ? shirtsMatch[1] === 'true' : true,
+                      sells_knits: knitsMatch ? knitsMatch[1] === 'true' : true,
                       matches_region: regionMatch ? regionMatch[1] === 'true' : true,
                       matches_category: catMatch ? catMatch[1] === 'true' : true,
                     });
@@ -762,7 +762,7 @@ Respond with ONLY this JSON (Do NOT include reasoning or descriptions to save sp
                 typeof b.name === 'string' &&
                 typeof b.website === 'string' &&
                 b.is_actual_apparel_brand === true &&
-                b.sells_shirts === true &&
+                b.sells_knits === true &&
                 b.matches_region === true &&
                 (b.matches_category === true || b.matches_category === undefined)
               )

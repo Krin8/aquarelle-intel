@@ -31,6 +31,8 @@ Do NOT guess. Do NOT invent data based on regional stereotypes.
 If a specific metric (like MOQ, certifications, or lead times) is not explicitly known or stated on their website, you MUST output null or an empty array [].
 If they are a globally known entity, you may use your verified knowledge to provide specific factual details, but you must still abstain from guessing.
 
+ANTI-HALLUCINATION: For "financialHealth" and "brandRelationship", you MUST combine the website context with your verified internal AI knowledge base. If you do not have high-confidence (90%+) verified internal knowledge about their financial health or their specific relationship history with the brand, you MUST output null. Do not hallucinate or guess.
+
 Return ONLY a JSON object matching this interface:
 {
   "companyOverview": "string",
@@ -59,7 +61,9 @@ Return ONLY a JSON object matching this interface:
   "weaknesses": ["string"],
   "uniqueCapabilities": ["string"],
   "competitiveAdvantages": ["string"],
-  "riskFactors": ["string"]
+  "riskFactors": ["string"],
+  "financialHealth": "string | null",
+  "brandRelationship": "string | null"
 }`;
 
     const { result } = await generateStructuredResponse<any>(
@@ -100,7 +104,9 @@ Return ONLY a JSON object matching this interface:
         weaknesses: JSON.stringify(result.weaknesses || []),
         uniqueCapabilities: JSON.stringify(result.uniqueCapabilities || []),
         competitiveAdvantages: JSON.stringify(result.competitiveAdvantages || []),
-        riskFactors: JSON.stringify(result.riskFactors || [])
+        riskFactors: JSON.stringify(result.riskFactors || []),
+        financialHealth: result.financialHealth || null,
+        brandRelationship: result.brandRelationship || null
       }
     });
 

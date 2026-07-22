@@ -5,21 +5,17 @@ import { runAllSearches } from './search-orchestrator';
 import { launchBrowser } from "@/lib/browser";
 
 
-interface SupplierCrawlSettings {
-  maxSuppliersPerScan: number;
-}
-
-export async function startSupplierDiscovery(targetBrandId: string, settings: SupplierCrawlSettings) {
+export async function startSupplierDiscovery(targetBrandId: string) {
   const targetBrand = await prisma.brand.findUnique({ where: { id: targetBrandId } });
   if (!targetBrand) throw new Error('Target brand not found');
 
   // Fire and forget background worker
-  processSupplierQueue(targetBrandId, targetBrand.name, settings).catch(console.error);
+  processSupplierQueue(targetBrandId, targetBrand.name).catch(console.error);
 
   return { success: true, message: 'Supplier discovery started in background' };
 }
 
-async function processSupplierQueue(targetBrandId: string, targetBrandName: string, settings: SupplierCrawlSettings) {
+async function processSupplierQueue(targetBrandId: string, targetBrandName: string) {
   console.log(`[SupplierCrawler] Starting discovery for ${targetBrandName}`);
 
   let browser;
@@ -50,17 +46,21 @@ async function processSupplierQueue(targetBrandId: string, targetBrandName: stri
     }
 
     const searchContext = allSearchResults
-      .slice(0, 30)
       .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}`)
       .join('\n\n');
 
-    const listPrompt = `You are a Supply Chain Intelligence Expert. Given the search results looking for manufacturing partners of ${targetBrandName}, extract the names of their primary DIRECT suppliers/factories.
+    const listPrompt = `You are a Supply Chain Intelligence Expert. Your goal is to identify the primary DIRECT apparel suppliers and factories for the brand: ${targetBrandName}.
+
+First, carefully review the search results provided to extract known suppliers.
+Second, use your own internal AI knowledge to supplement the list with any other major, well-known direct manufacturing partners for ${targetBrandName} (even if they weren't explicitly named in the search results).
+
 CRITICAL RULES FOR SHARPNESS: 
 1. STRICTLY ONLY APPAREL SUPPLIERS: You must ONLY extract companies that physically manufacture garments, fabrics, or trims. 
 2. ONLY DIRECT SUPPLIERS: DO NOT extract indirect suppliers. Absolutely NO technology companies, software providers, POS systems, packaging companies, store fixture builders, logistics/freight forwarders (like DHL/FedEx), or marketing agencies.
 3. If a company is not directly and explicitly related to textile or garment production (e.g. Garment Manufacturers, Fabric Mills, Trims Suppliers, Apparel OEMs), IGNORE IT completely.
+4. ANTI-HALLUCINATION: Only include a supplier from your internal knowledge if you have HIGH CONFIDENCE (90%+) that they manufacture for ${targetBrandName}. Do NOT guess or hallucinate. If you are unsure, omit them.
 
-Extract up to ${settings.maxSuppliersPerScan} DIRECT apparel suppliers. Return ONLY JSON.
+Combine the suppliers found in the search results with those from your internal knowledge. Extract all DIRECT apparel suppliers. Return ONLY JSON.
 Format: { "suppliers": [{ "name": "Company X", "type": "Garment Manufacturer", "location": "Vietnam", "website": "https://example.com" }] }`;
 
     let discoveredSuppliers: { name: string; type: string; location: string; website?: string }[] = [];
@@ -74,6 +74,7 @@ Format: { "suppliers": [{ "name": "Company X", "type": "Garment Manufacturer", "
         }
       );
       discoveredSuppliers = result.suppliers || [];
+      console.log(`[SupplierCrawler] AI extracted ${discoveredSuppliers.length} suppliers:`, discoveredSuppliers.map(s => s.name));
     } catch (e) {
       console.error(`[SupplierCrawler] Failed to extract suppliers from search results:`, e);
       return;

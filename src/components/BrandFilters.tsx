@@ -85,6 +85,32 @@ export function BrandFilters({
         )}
         
         <span style={{ width: '1px', background: 'var(--border-subtle)', margin: '0 4px' }}></span>
+
+        <select
+          className="filter-chip"
+          style={{ background: 'transparent', cursor: 'pointer' }}
+          value={searchParams.get('marketGrade') || ''}
+          onChange={(e) => updateFilter('marketGrade', e.target.value)}
+        >
+          <option value="">Any Grade</option>
+          <option value="A+">A+ Grade</option>
+          <option value="A">A Grade</option>
+          <option value="B">B Grade</option>
+          <option value="C">C Grade</option>
+          <option value="D">D Grade</option>
+        </select>
+
+        <select
+          className="filter-chip"
+          style={{ background: 'transparent', cursor: 'pointer' }}
+          value={searchParams.get('storeSize') || ''}
+          onChange={(e) => updateFilter('storeSize', e.target.value)}
+        >
+          <option value="">Any Store Size</option>
+          <option value="small">Small (0-150)</option>
+          <option value="medium">Medium (151-500)</option>
+          <option value="large">Large (500+)</option>
+        </select>
         
         <select 
           className="filter-chip"

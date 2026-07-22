@@ -33,7 +33,7 @@ export function SupplierIntelligenceDashboard({ brandId }: { brandId: string }) 
 
   const handleDiscover = async () => {
     setDiscovering(true);
-    await discoverSuppliersAction(brandId, 5);
+    await discoverSuppliersAction(brandId);
     alert('Supplier discovery initiated in the background. Check back soon!');
     setDiscovering(false);
   };
@@ -43,6 +43,14 @@ export function SupplierIntelligenceDashboard({ brandId }: { brandId: string }) 
       await deleteSupplier(id, brandId);
       fetchSuppliers();
     }
+  };
+
+  const handleReanalyze = async (supplierId: string) => {
+    setLoading(true);
+    // We'll call an action to trigger re-analysis
+    const { analyzeSupplierAction } = await import('@/actions/supplier-actions');
+    await analyzeSupplierAction(supplierId);
+    await fetchSuppliers();
   };
 
   const safeJsonParse = (str: any, fallback: any = []) => {
@@ -114,14 +122,36 @@ export function SupplierIntelligenceDashboard({ brandId }: { brandId: string }) 
                       {selectedSupplier.name}
                     </h2>
                   </div>
-                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-rose)' }} onClick={() => handleDelete(selectedSupplier.id)}>
-                    Remove
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleReanalyze(selectedSupplier.id)}>
+                      ✦ Re-analyze
+                    </button>
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-rose)' }} onClick={() => handleDelete(selectedSupplier.id)}>
+                      Remove
+                    </button>
+                  </div>
                 </div>
 
                 <div style={{ marginTop: 'var(--space-md)', fontSize: '13px', color: 'var(--text-secondary)' }}>
                   {selectedSupplier.companyOverview}
                 </div>
+
+                {(selectedSupplier.financialHealth || selectedSupplier.brandRelationship) && (
+                  <div style={{ marginTop: 'var(--space-md)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
+                    {selectedSupplier.financialHealth && (
+                      <div style={{ padding: 'var(--space-sm)', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '6px' }}>
+                        <strong style={{ fontSize: '12px', color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>Financial Health:</strong>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{selectedSupplier.financialHealth}</div>
+                      </div>
+                    )}
+                    {selectedSupplier.brandRelationship && (
+                      <div style={{ padding: 'var(--space-sm)', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '6px' }}>
+                        <strong style={{ fontSize: '12px', color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>Brand Relationship:</strong>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{selectedSupplier.brandRelationship}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {selectedSupplier.winStrategy ? (

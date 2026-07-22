@@ -500,6 +500,8 @@ model SupplierProfile {
   uniqueCapabilities        String?
   competitiveAdvantages     String?
   riskFactors               String?
+  financialHealth           String?
+  brandRelationship         String?
   createdAt                 DateTime      @default(now())
   updatedAt                 DateTime      @updatedAt
   website                   String?

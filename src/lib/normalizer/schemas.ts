@@ -14,6 +14,8 @@ export const WebsiteAnalysisSchema = z.object({
   sustainability: z.string().nullish().catch(null).describe('Any sustainability or ethical claims'),
   distributionChannels: z.array(z.string()).nullish().catch(null).describe('How they sell: DTC, wholesale, retail partners'),
   headquartersLocation: z.string().nullish().catch(null).describe('Where the brand is based'),
+  financialHealth: z.string().nullish().catch(null).describe('Details about the company\'s financial health (e.g., revenue, profitability, funding), using internal knowledge. Strict anti-hallucination.'),
+  supplierRelation: z.string().nullish().catch(null).describe('Details about their relation with their suppliers (e.g., known manufacturing partners, supply chain strategy), using internal knowledge. Strict anti-hallucination.'),
 });
 
 export type WebsiteAnalysis = z.infer<typeof WebsiteAnalysisSchema>;

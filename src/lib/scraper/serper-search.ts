@@ -12,9 +12,9 @@ export async function runSerperSearch(query: string): Promise<SearchResult[]> {
     return [];
   }
 
-  // Serper free tier restricts advanced query operators like excessive quotes.
-  // We remove quotes to prevent 400 "Query pattern not allowed" errors.
-  const cleanQuery = query.replace(/"/g, '');
+  // Serper free tier restricts advanced query operators like excessive quotes or site:.
+  // We remove them to prevent 400 "Query pattern not allowed" errors.
+  const cleanQuery = query.replace(/"/g, '').replace(/site:/g, '');
   const allResults: SearchResult[] = [];
 
   try {

@@ -9,7 +9,7 @@ import { BrandGridClient } from '@/components/BrandGridClient';
 export default async function BrandsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; region?: string; country?: string; search?: string; minScore?: string; hasContacts?: string }>;
+  searchParams: Promise<{ status?: string; region?: string; country?: string; search?: string; minScore?: string; hasContacts?: string; marketGrade?: string; storeSize?: string }>;
 }) {
   const params = await searchParams;
   console.log('[DEBUG] BrandsPage rendering with params:', params);
@@ -20,6 +20,8 @@ export default async function BrandsPage({
     search: params.search,
     minScore: params.minScore,
     hasContacts: params.hasContacts,
+    marketGrade: params.marketGrade,
+    storeSize: params.storeSize,
   });
 
   const countries = [...new Set(brands.map(b => b.countryOfOrigin).filter(Boolean))] as string[];

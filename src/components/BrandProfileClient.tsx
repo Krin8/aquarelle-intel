@@ -730,6 +730,18 @@ export function BrandProfileClient({ brand, pitchTemplates }: { brand: BrandWith
                     </ul>
                   </div>
                 )}
+                {websiteData.financialHealth && (
+                  <div>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Financial Health</span>
+                    <p style={{ fontSize: '14px', marginTop: '4px' }}>{websiteData.financialHealth as string}</p>
+                  </div>
+                )}
+                {websiteData.supplierRelation && (
+                  <div>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Supplier Relations</span>
+                    <p style={{ fontSize: '14px', marginTop: '4px' }}>{websiteData.supplierRelation as string}</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="empty-state" style={{ padding: 'var(--space-lg)' }}>

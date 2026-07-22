@@ -163,6 +163,8 @@ export async function getBrands(filters?: {
   search?: string;
   minScore?: string;
   hasContacts?: string;
+  marketGrade?: string;
+  storeSize?: string;
 }) {
   console.log('[DEBUG] getBrands called with filters:', filters);
   const where: any = {};

@@ -44,6 +44,8 @@ Return exactly this JSON object — no extra keys, no omitted keys:
   "sustainability"       : "<sustainability/ethical claims from site or known | null>",
   "distributionChannels" : ["<channels: DTC | wholesale | retail | marketplace>"],
   "headquartersLocation" : "<city and/or country | null>",
+  "financialHealth"      : "<company financial health (e.g., revenue, profitability, funding) from known data or null if unknown — STRICT ANTI-HALLUCINATION>",
+  "supplierRelation"     : "<relation with suppliers/manufacturers (e.g., known partners like CIEL Textile) from known data or null if unknown — STRICT ANTI-HALLUCINATION>",
   "dataConfidence"       : "<high | medium | low — see CONFIDENCE RUBRIC>"
 }
 
@@ -61,7 +63,7 @@ Classify using ONLY evidence in the content above — not brand reputation:
 - low   → fewer than 4 fields found in content
 
 ## KNOWLEDGE AUGMENTATION
-If the website content is sparse, use your training knowledge to enrich the brand intelligence (segment, target customer, key differentiators, headquarters, distribution channels). Ensure all claims accurately reflect the real-world brand.`;
+If the website content is sparse, use your training knowledge to enrich the brand intelligence (segment, target customer, key differentiators, headquarters, distribution channels, financialHealth, supplierRelation). Ensure all claims accurately reflect the real-world brand.`;
 
 
   // ─── ROBUST JSON PARSER ───────────────────────────────────────────────────

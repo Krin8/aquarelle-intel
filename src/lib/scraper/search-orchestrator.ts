@@ -31,7 +31,6 @@ export async function runAllSearches(
   const tasks: { name: string; promise: Promise<SearchResult[]> }[] = [];
 
   // 1. Gemini API (no browser needed)
-  /* Temporarily removed
   tasks.push({
     name: 'Gemini',
     promise: runAiSearch(query).catch((e) => {
@@ -39,7 +38,6 @@ export async function runAllSearches(
       return [] as SearchResult[];
     }),
   });
-  */
 
   // 2. Serper API
   tasks.push({

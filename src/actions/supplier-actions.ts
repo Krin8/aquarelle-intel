@@ -17,11 +17,9 @@ export async function getSuppliersForBrand(targetBrandId: string) {
   return suppliers;
 }
 
-export async function discoverSuppliersAction(targetBrandId: string, maxSuppliers: number) {
+export async function discoverSuppliersAction(targetBrandId: string) {
   try {
-    await startSupplierDiscovery(targetBrandId, {
-      maxSuppliersPerScan: maxSuppliers,
-      });
+    await startSupplierDiscovery(targetBrandId);
     revalidatePath(`/brands/${targetBrandId}`);
     return { success: true };
   } catch (error) {

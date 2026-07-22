@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { getFreshnessLabel } from '@/lib/normalizer/confidence-scorer';
 import { scrapeBrand } from '@/actions/scrape-actions';
 import { deleteBrands } from '@/actions/brand-actions';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiKeyModal } from './ApiKeyModal';
 
 type BrandType = {
@@ -124,6 +124,7 @@ function convertPriceToUSD(priceStr: string | null, rates: Record<string, number
 
 export function BrandGridClient({ brands }: { brands: BrandType[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeProgress, setScrapeProgress] = useState({ current: 0, total: 0 });
@@ -255,9 +256,38 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
           </div>
         </div>
 
-        {brands.map((brand, i) => {
-          const freshness = getFreshnessLabel(brand.dataFreshness);
-          const isSelected = selectedIds.has(brand.id);
+        {(() => {
+          const filterGrade = searchParams.get('marketGrade');
+          const filterSize = searchParams.get('storeSize');
+          
+          const filteredBrands = brands.filter(brand => {
+            if (filterSize && filterSize !== 'all') {
+              const stores = brand.storesCount || 0;
+              if (filterSize === 'small' && stores > 150) return false;
+              if (filterSize === 'medium' && (stores <= 150 || stores > 500)) return false;
+              if (filterSize === 'large' && stores <= 500) return false;
+            }
+
+            if (filterGrade && filterGrade !== 'all') {
+              const converted = brand.retailPriceMensShirt ? convertPriceToUSD(brand.retailPriceMensShirt, exchangeRates) : null;
+              const gradeInfo = getPriceGrade(converted, brand.marketGrade);
+              if (!gradeInfo || gradeInfo.label !== filterGrade) return false;
+            }
+
+            return true;
+          });
+
+          if (filteredBrands.length === 0) {
+            return (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                No brands match these exact filters.
+              </div>
+            );
+          }
+
+          return filteredBrands.map((brand, i) => {
+            const freshness = getFreshnessLabel(brand.dataFreshness);
+            const isSelected = selectedIds.has(brand.id);
 
           return (
             <div
@@ -383,7 +413,8 @@ export function BrandGridClient({ brands }: { brands: BrandType[] }) {
               </Link>
             </div>
           );
-        })}
+          });
+        })()}
       </div>
 
       <ApiKeyModal 
