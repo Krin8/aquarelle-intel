@@ -1,5 +1,3 @@
-import { getApiKey } from '@/lib/settings';
-
 export type VerificationStatus = 'valid' | 'catch-all' | 'invalid' | 'unverified';
 
 export interface VerificationResult {
@@ -16,7 +14,12 @@ export async function verifyEmail(email: string): Promise<VerificationResult> {
     return CACHE.get(normalizedEmail)!;
   }
 
-  const apiKey = await getApiKey('MEV');
+  // Quick reject for obviously malformed emails like "@domain.com"
+  if (!normalizedEmail.includes('@') || normalizedEmail.startsWith('@')) {
+    return { status: 'invalid', rawResult: { error: 'Malformed email format' } };
+  }
+
+  const apiKey = process.env.MEV_API_KEY;
   if (!apiKey) {
     console.warn('[MyEmailVerifier] MEV_API_KEY is not set. Marking email as unverified.');
     return { status: 'unverified', rawResult: { error: 'Missing API key' } };
@@ -24,7 +27,7 @@ export async function verifyEmail(email: string): Promise<VerificationResult> {
 
   try {
     const url = `https://api.myemailverifier.com/api/validate_single.php?apikey=${apiKey}&email=${encodeURIComponent(normalizedEmail)}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
     
     if (!response.ok) {
       console.error(`[MyEmailVerifier] API error: ${response.status} ${response.statusText}`);
@@ -43,6 +46,8 @@ export async function verifyEmail(email: string): Promise<VerificationResult> {
       } else {
         status = 'invalid';
       }
+    } else if (data?.status === 'error' && data?.message?.includes('credits')) {
+      console.warn(`[MyEmailVerifier] Out of credits! Marking as unverified.`);
     } else {
       console.warn(`[MyEmailVerifier] Unexpected API response format:`, data);
     }

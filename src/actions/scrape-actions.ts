@@ -5,7 +5,7 @@ import { scrapeUrl } from '@/lib/scraper';
 import { scoreConfidence, getContactConfidence } from '@/lib/normalizer/confidence-scorer';
 import { extractContacts, findContactsFromKnowledge } from '@/lib/ai/analyzers/contact-extractor';
 import { extractCompanyOverview } from '@/lib/ai/analyzers/company-overview-extractor';
-import { filterWovens, dedupeProductVariants } from '@/lib/scraper/woven-filter';
+import { filterKnits, dedupeProductVariants } from '@/lib/scraper/knit-filter';
 import { categorizeProducts } from '@/lib/ai/analyzers/product-categorizer';
 import { convertToUSD } from '@/lib/scraper/fx-converter';
 import { findDomainAndPatternWithHunter, findDomainPatternWithHunter, findRobustDomainPattern, generateEmail, deriveEmailPattern } from '@/lib/normalizer/email-pattern';
@@ -139,7 +139,7 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
         }
       }
 
-      console.log(`[Scrape] Querying Gemini's internal knowledge base for contacts...`);
+      console.log(`[Scrape] Querying Gemini's internal knowledge base for ${brand.name}...`);
       const kbResult = await findContactsFromKnowledge(brand.name);
       if (kbResult && kbResult.contacts) {
         const kbContacts = kbResult.contacts.map(c => ({ ...c, _source: 'google_ai_sge' }));
@@ -180,7 +180,7 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
             // Grab up to 3 valid persons as samples
             const samplePersons = [];
             for (const c of aiContacts) {
-              if (c.name && samplePersons.length < 3) {
+              if (c.name) {
                 const parts = c.name.trim().split(' ');
                 if (parts.length >= 2) samplePersons.push({ name: c.name, firstName: parts[0], lastName: parts.slice(1).join(' ') });
               }
@@ -188,13 +188,13 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
 
             const { pattern: derivedPattern, domain: verifiedDomain } = await findRobustDomainPattern(domain, samplePersons);
             
-            // If we got a robust pattern (not unknown, and not the bad {first} fallback)
-            if (derivedPattern !== 'unknown' && derivedPattern !== '{first}') {
+            // If we got a robust pattern
+            if (derivedPattern !== 'unknown') {
               hunterDomain = verifiedDomain || domain;
               hunterPattern = derivedPattern;
               console.log(`[Scrape] Successfully locked domain ${domain} with robust pattern ${derivedPattern}`);
               break; // Stop testing other domains, we found a winner!
-            } else if (hPattern && hPattern !== 'unknown' && hPattern !== '{first}' && hunterPattern === 'unknown') {
+            } else if (hPattern && hPattern !== 'unknown' && hunterPattern === 'unknown') {
               // Keep this as a fallback if the robust check completely failed across all domains
               hunterDomain = domain;
               hunterPattern = hPattern;
@@ -408,7 +408,7 @@ export async function scrapeBrand(brandId: string, options?: { useDataProvider?:
       // 1. Keyword Pre-Filter (fast, cheap)
       console.log(`[Scrape Debug] Raw product sample (first 5):`, content.extractedProducts.slice(0, 5).map((p: any) => `${p.name} | img:${!!p.imageUrl} | src:${!!p.sourceUrl}`));
       const dedupedProducts = dedupeProductVariants(content.extractedProducts);
-      const validShirts = filterWovens(dedupedProducts);
+      const validShirts = filterKnits(dedupedProducts);
       
       // 2. Strict Taxonomy Categorization (Regex-based)
       const categorizedShirts = await categorizeProducts(validShirts, brand.name);
@@ -581,8 +581,8 @@ export async function bulkScrapeBrands() {
     isScraping: true
   };
 
-  // Fire and forget background process, wrapping in setTimeout to prevent Next.js from blocking the response
-  setTimeout(async () => {
+  // Fire and forget background process
+  (async () => {
     console.log(`[BulkScrape] Starting bulk scrape for ${brands.length} brands...`);
     for (const brand of brands) {
       if (globalThis.bulkScrapeProgress) {
@@ -610,7 +610,7 @@ export async function bulkScrapeBrands() {
       globalThis.bulkScrapeProgress.isScraping = false;
       globalThis.bulkScrapeProgress.currentBrand = 'Done';
     }
-  }, 100);
+  })();
 
   return { success: true };
 }
@@ -623,6 +623,34 @@ export async function generateMoreContacts(brandId: string) {
   if (!brand) return { error: 'Brand not found' };
 
   try {
+    let hunterDomain = brand.emailDomain || '';
+    let hunterPattern = brand.emailPattern || 'unknown';
+
+    // 1. Backfill any existing contacts that are missing emails using the cached pattern
+    if (hunterPattern !== 'unknown' && hunterDomain) {
+      let backfilled = false;
+      for (const existingContact of brand.contacts) {
+        if (!existingContact.email && existingContact.name) {
+           const nameParts = existingContact.name.trim().split(/\s+/);
+           if (nameParts.length >= 2) {
+             const genEmail = generateEmail(nameParts[0], nameParts[nameParts.length - 1], hunterDomain, hunterPattern);
+             if (genEmail) {
+                const verification = await verifyEmail(genEmail);
+                if (verification.status !== 'invalid') {
+                  await prisma.contact.update({
+                    where: { id: existingContact.id },
+                    data: { email: genEmail, confidenceScore: getContactConfidence({ ...existingContact, email: genEmail }) }
+                  });
+                  backfilled = true;
+                  console.log(`[Scrape] Backfilled email for existing contact ${existingContact.name}: ${genEmail}`);
+                }
+             }
+           }
+        }
+      }
+      if (backfilled) revalidatePath(`/brands/${brandId}`);
+    }
+
     const existingNames = brand.contacts.map((c: any) => c.name).filter(Boolean);
     const { findContactsFromKnowledge } = await import('@/lib/ai/analyzers/contact-extractor');
     const { contacts: newAiContacts } = await findContactsFromKnowledge(brand.name, existingNames);
@@ -641,22 +669,21 @@ export async function generateMoreContacts(brandId: string) {
         if (!candidateDomains.includes(rootDomain)) candidateDomains.push(rootDomain);
       }
     }
-    
-    let hunterDomain = brand.emailDomain || '';
-    let hunterPattern = brand.emailPattern || '';
+    hunterDomain = brand.emailDomain || hunterDomain;
+    hunterPattern = brand.emailPattern || hunterPattern;
     
     // Only attempt to derive the pattern if we don't already have it cached on the brand
-    if (!hunterDomain || !hunterPattern) {
+    if (!hunterDomain || hunterPattern === 'unknown') {
       const samplePersons = [];
       for (const c of newAiContacts) {
-        if (c.name && samplePersons.length < 3) {
+        if (c.name) {
           const parts = c.name.trim().split(/\s+/);
           if (parts.length >= 2) samplePersons.push({ name: c.name, firstName: parts[0], lastName: parts.slice(1).join(' ') });
         }
       }
       for (const domain of candidateDomains) {
         const { pattern, domain: verifiedDomain } = await findRobustDomainPattern(domain, samplePersons);
-        if (pattern !== 'unknown' && pattern !== '{first}') {
+        if (pattern !== 'unknown') {
           hunterDomain = verifiedDomain || domain;
           hunterPattern = pattern;
           // Save it back to the brand so it is not repeatedly derived

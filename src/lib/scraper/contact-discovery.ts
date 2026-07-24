@@ -328,6 +328,41 @@ export async function runContactDiscoveryForBrand(brandId: string) {
         }
       }
 
+      // --- ROCKETREACH FALLBACK ---
+      if (derivedPattern === 'unknown') {
+        const rocketreachKey = process.env.ROCKETREACH_API_KEY;
+        const samplePerson = discoveredPeople.find(p => p.firstName && p.lastName);
+        if (rocketreachKey && samplePerson) {
+          console.log(`[ContactDiscovery] Prospeo skipped/failed. Querying RocketReach for ${samplePerson.name}...`);
+          try {
+            const rrQuery = new URLSearchParams({
+              name: samplePerson.name,
+              current_employer: discoveredDomain
+            });
+            const rrRes = await fetch(`https://api.rocketreach.co/v2/api/lookupProfile?${rrQuery.toString()}`, {
+              headers: {
+                'Api-Key': rocketreachKey
+              }
+            });
+            if (rrRes.ok) {
+              const data = await rrRes.json();
+              const foundEmail = data?.current_work_email || data?.emails?.[0]?.email || data?.emails?.[0];
+              if (foundEmail && typeof foundEmail === 'string') {
+                console.log(`[ContactDiscovery] RocketReach found email: ${foundEmail}`);
+                derivedPattern = deriveEmailPattern(samplePerson.firstName!, samplePerson.lastName!, foundEmail);
+                console.log(`[ContactDiscovery] Derived Pattern from RocketReach: ${derivedPattern}`);
+              } else {
+                console.log(`[ContactDiscovery] RocketReach succeeded but no email found.`);
+              }
+            } else {
+              console.log(`[ContactDiscovery] RocketReach API failed: ${rrRes.status}`);
+            }
+          } catch (e) {
+            console.warn('[ContactDiscovery] RocketReach request error:', e);
+          }
+        }
+      }
+
       // --- FINAL DEFAULT FALLBACK ---
       if (derivedPattern === 'unknown') {
         console.log(`[ContactDiscovery] No pattern found from APIs. Proceeding without email generation.`);

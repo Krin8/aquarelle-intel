@@ -1,22 +1,17 @@
 import { GoogleGenAI } from '@google/genai';
-import { getApiKey } from '@/lib/settings';
 
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // We'll use gemini-2.5-flash as the default model since it's fast and highly capable for these tasks
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 let geminiInstance: GoogleGenAI | null = null;
-let lastKeyUsed: string | null = null;
 
-export async function getGemini(): Promise<GoogleGenAI> {
-  const apiKey = await getApiKey('GEMINI');
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured in settings');
-  }
-
-  // Re-initialize if key changed (or if it's the first time)
-  if (!geminiInstance || lastKeyUsed !== apiKey) {
-    geminiInstance = new GoogleGenAI({ apiKey });
-    lastKeyUsed = apiKey;
+export function getGemini(): GoogleGenAI {
+  if (!geminiInstance) {
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is not set in environment variables');
+    }
+    geminiInstance = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
   }
   return geminiInstance;
 }
@@ -28,7 +23,7 @@ export async function checkGeminiHealth(): Promise<{
 }> {
   try {
     // A simple prompt to check if the API is reachable and key is valid
-    const ai = await getGemini();
+    const ai = getGemini();
     await ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: 'ping',
@@ -44,17 +39,14 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, initial
   let lastError: any;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      // Add a 60-second hard timeout to prevent silent connection hangs
-      return await Promise.race([
-        operation(),
-        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Gemini API request timed out after 60s')), 60000))
-      ]);
+      return await operation();
     } catch (error: any) {
       lastError = error;
       const is503 = error?.status === 503 || error?.message?.includes('503') || error?.status === 'UNAVAILABLE';
       const is429 = error?.status === 429 || error?.message?.includes('429') || error?.status === 'RESOURCE_EXHAUSTED';
+      const isNetworkError = error?.message?.includes('fetch failed') || error?.cause?.code === 'ECONNRESET' || error?.cause?.code === 'ETIMEDOUT';
       
-      if (!is503 && !is429) {
+      if (!is503 && !is429 && !isNetworkError) {
         if (error instanceof Error) {
           throw error;
         } else {
@@ -83,7 +75,7 @@ export async function generateStructuredResponse<T>(
   parseResponse: (text: string) => T,
   useGoogleSearch?: boolean
 ): Promise<{ result: T; rawResponse: string; model: string }> {
-  const ai = await getGemini();
+  const ai = getGemini();
 
   const response = await withRetry(() => ai.models.generateContent({
     model: GEMINI_MODEL,
@@ -97,9 +89,10 @@ export async function generateStructuredResponse<T>(
     },
   }));
 
-  const rawResponse = response.text;
+  let rawResponse = response.text;
   if (!rawResponse) {
-    throw new Error('No response text received from Gemini');
+    console.warn('[Gemini] No response text received. Candidates:', JSON.stringify(response.candidates, null, 2));
+    rawResponse = '{}';
   }
 
   // Clean markdown code fences that Gemini sometimes adds despite responseMimeType
@@ -123,7 +116,7 @@ export async function generateTextResponse(
   systemPrompt: string,
   userPrompt: string
 ): Promise<{ text: string; model: string }> {
-  const ai = await getGemini();
+  const ai = getGemini();
 
   const response = await withRetry(() => ai.models.generateContent({
     model: GEMINI_MODEL,
