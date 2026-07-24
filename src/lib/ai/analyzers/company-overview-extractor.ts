@@ -23,7 +23,7 @@ CRITICAL INSTRUCTIONS:
 - Format revenue/turnover concisely (e.g., "$1.2B", "$500M"). Do not output raw large numbers.
 - If a brand is part of a larger conglomerate (e.g., Gap Inc. for Old Navy), specify the parent company. If independent, leave null.
 - State should be standard postal abbreviation if US (e.g., "NY", "CA").
-- For product type, use short categories like "Denim", "Outdoor Gear", "Luxury Apparel".
+- For product type, use short knitwear-focused categories like “T-Shirts”, “Polos”, “Sweatshirts”, “Hoodies”, “Athleisure”, “Loungewear”, or “Fashion Knitwear”.
 - ANTI-HALLUCINATION: Never fabricate, infer, estimate, or hallucinate facts. Every non-null value must be one you are highly confident is accurate and associated with this exact company.
 - If a field cannot be determined with high confidence from the provided search snippets, website content, or your reliable internal knowledge, return null for that field rather than guessing.
 - If multiple conflicting values exist, prefer the most recent authoritative information. If the conflict cannot be resolved with high confidence, return null for that field.
@@ -51,8 +51,7 @@ export async function extractCompanyOverview(
   const userPrompt = `Brand Name: ${brandName}
 Target Region: ${region}
 
-CRITICAL: The user has requested data for the specific region: "${region}". 
-If this is not "Global", you MUST attempt to extract the turnover, storesCount, and retailPriceMensShirt specifically for the "${region}" region (e.g. stores in Europe, revenue in North America). If regional data is completely unavailable, fall back to global numbers.
+CRITICAL: The user has requested data for the specific region: "${region}", But still give only "Global" data.
 
 Search Results Snippets (ZoomInfo, Wikipedia, Volza, etc):
 ${searchSnippets || "None provided. Rely entirely on your knowledge base and website content."}
@@ -76,76 +75,9 @@ Extract the company overview fields.`;
 
     if (!result) return null;
 
-    console.log(`[AI:CompanyOverviewExtractor] Step 1 complete. Running Step 2 Verification for ${brandName}...`);
-    const verifiedResult = await verifyCompanyOverview(brandName, result as ExtractedCompanyOverview, searchSnippets, websiteContent);
-    return verifiedResult;
+    return result as ExtractedCompanyOverview;
   } catch (error) {
     console.error(`[AI:CompanyOverviewExtractor] Failed to extract for ${brandName}:`, error);
     return null;
-  }
-}
-
-const VERIFIER_SYSTEM_PROMPT = `You are a ruthless B2B Data Verification Agent with access to Google Search.
-Your job is to review a previously extracted company overview against the provided source material and your own search capabilities.
-
-CRITICAL INSTRUCTIONS:
-- Scrutinize every non-null field in the "Extracted Data".
-- ANTI-HALLUCINATION: If the data is unsupported by the sources OR contradicts your highly confident internal knowledge, you MUST NOT just guess. You MUST use your search capabilities to find the actual, verifiable fact.
-- If you can find a supported fact, UPDATE the field with the correct information.
-- If you cannot find a supported fact after searching, you MUST set it to null.
-- If the data is poorly formatted (e.g., turnover is "1200000000" instead of "$1.2B", or state is "New York" instead of "NY"), you MUST fix it.
-- If the data is accurate and supported, pass it through unchanged.
-- Respond strictly with a JSON object using EXACTLY these keys:
-{
-  "parentCompany": "string | null",
-  "countryOfOrigin": "string | null",
-  "city": "string | null",
-  "state": "string | null",
-  "turnover": "string | null",
-  "storesCount": "number | null",
-  "retailPriceMensShirt": "string | null",
-  "productType": "string | null"
-}
-No markdown fences, no summary text.`;
-
-export async function verifyCompanyOverview(
-  brandName: string,
-  initialData: ExtractedCompanyOverview,
-  searchSnippets: string,
-  websiteContent: string
-): Promise<ExtractedCompanyOverview> {
-  const userPrompt = `Brand Name: ${brandName}
-
-Extracted Data to Verify:
-${JSON.stringify(initialData, null, 2)}
-
-Search Results Snippets:
-${searchSnippets || "None provided."}
-
-Website Content Snippet:
-${websiteContent.slice(0, 3000) || "None provided."}
-
-Verify the extracted data. Fix formatting issues and nullify any unsupported/hallucinated facts. Return the corrected JSON.`;
-
-  try {
-    const { result } = await generateStructuredResponse<ExtractedCompanyOverview>(
-      VERIFIER_SYSTEM_PROMPT,
-      userPrompt,
-      (text) => {
-        const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
-        const parsed = JSON.parse(cleaned);
-        return AICompanyOverviewSchema.parse(parsed);
-      },
-      true
-    );
-    
-    if (result) {
-      console.log(`[AI:CompanyOverviewVerifier] Verification complete for ${brandName}.`);
-      return result as ExtractedCompanyOverview;
-    }
-    return initialData;
-  } catch (error) {
-    console.error(`[AI:CompanyOverviewVerifier] Failed to verify for ${brandName}, falling back to initial data:`, error);
-    return initialData;
   }
 }
