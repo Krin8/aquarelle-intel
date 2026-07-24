@@ -33,3 +33,9 @@ export async function deleteSupplier(supplierId: string, brandId: string) {
   revalidatePath(`/brands/${brandId}`);
   return { success: true };
 }
+
+export async function analyzeSupplierAction(supplierId: string) {
+  // Placeholder for future implementation
+  console.log('Analyze supplier triggered for', supplierId);
+  return { success: true };
+}
